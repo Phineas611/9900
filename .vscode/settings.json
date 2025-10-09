@@ -1,0 +1,7 @@
+{
+  "python.defaultInterpreterPath": "F:\\9900project\\LegalContractAnalyzer_h18c_bread\\venv\\Scripts\\python.exe",
+  "python.languageServer": "Pylance",
+  "python.analysis.autoImportCompletions": true,
+  "python.analysis.completeFunctionParens": true,
+  "python.analysis.typeCheckingMode": "basic"
+}

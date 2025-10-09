@@ -1,18 +1,26 @@
-from fastapi import FastAPI, UploadFile, File
-from pathlib import Path
+# backend/app/main.py
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.sessions import SessionMiddleware
+import uvicorn
 
-app = FastAPI()
+from app.presentation.routes.healthcheck import router as health_router
+from app.presentation.routes.auth import router as auth_router  
+from app.database.setup import create_tables
+from app.database import models  
+SECRET_KEY = "123456"
+app = FastAPI(title="test API", version="1.0.0")
 
-# 本地存储目录
-UPLOAD_DIR = Path("uploads")
-UPLOAD_DIR.mkdir(exist_ok=True)
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=SECRET_KEY,
+    same_site="lax",     
+    https_only=False,    
+)
 
-@app.post("/api/upload")
-async def upload_file(files: list[UploadFile] = File(...)):
-    saved_files = []
-    for f in files:
-        file_path = UPLOAD_DIR / f.filename
-        with open(file_path, "wb") as buffer:
-            buffer.write(await f.read())
-        saved_files.append(f.filename)
-    return {"message": "Upload successful", "files": saved_files}
+app.include_router(health_router, prefix="/api")
+app.include_router(auth_router,    prefix="/api")  
+create_tables()
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=5000, reload=True)
