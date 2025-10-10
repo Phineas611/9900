@@ -1,11 +1,11 @@
-
+```bash
 
 ## Manually installation steps
 
 IN windows system
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-python3 -m venv venv
-.\venv\Scripts\Activate.ps1
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass  
+python3 -m venv venv  
+.\venv\Scripts\Activate.ps1  
 pip3 install -r requirements.txt
 
 ## Architecture
@@ -29,4 +29,7 @@ run npm run dev
 
 This runs on localhost port 
 # Maintainers
-(Dylan-d.sanusi-goh@unsw.edu.au)
+(@unsw.edu.au)
+
+# Render 
+https://legalcontractanalyzer-backend.onrender.com/docs
