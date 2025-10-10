@@ -1,5 +1,5 @@
 # backend/app/presentation/routes/auth.py
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.orm import Session
 from app.application.models.auth import RegisterRequest, RegisterResponse, LoginRequest, LoginResponse
 from app.application.services.auth_service import AuthService
@@ -23,11 +23,6 @@ def login(payload: LoginRequest, response: Response, db: Session = Depends(get_d
 @router.get("/me")
 def me(user = Depends(get_current_user)):
     return {"id": user.id, "email": user.email, "name": user.name}
-
-from fastapi import APIRouter, Depends, Response, status
-
-from fastapi import APIRouter, Response, status
-
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 def logout(response: Response):
     response.delete_cookie(
