@@ -20,7 +20,10 @@ sqlalchemy for the database
 
 -Presentation layer to handle API routes
 run uvicorn app.main:app --reload --port 5000
+docs in http://localhost:5000/docs
 
+## Frontend
+run npm run dev
 
 ## Infrastructure
 
