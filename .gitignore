@@ -1,0 +1,22 @@
+﻿@'
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Virtual env
+.venv/
+
+# App runtime/output
+backend/contract_sentence_extractor/outputs/
+backend/contract_sentence_extractor/uploaded/
+
+# Local test data
+contracts/
+*.pdf
+*.docx
+
+# OS/editor
+.DS_Store
+Thumbs.db
+'@ | Out-File -Encoding utf8 .gitignore
