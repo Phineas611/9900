@@ -32,11 +32,11 @@ def sign_session(user_id: int, expire_seconds: int = 86400) -> str:
     payload = {"uid": user_id, "exp": int(time.time()) + expire_seconds}
     return SIGNER.dumps(payload)
 
-def verify_session(token: str) -> dict | None:
+def verify_session(token: str) -> int | None:
     try:
         data = SIGNER.loads(token)
     except BadSignature:
         return None
     if data.get("exp", 0) < int(time.time()):
         return None
-    return data
+    return data.get("uid")
