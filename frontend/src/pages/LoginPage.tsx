@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import './LoginPage.css';
 
 interface LoginPageProps {
-  onLogin: (email: string, token: string) => void;
+  onLogin: (email: string, token: string, name: string) => void;
 }
 
 // Login component page
@@ -36,9 +36,9 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
     }
 
     // test
-    onLogin(email, '111');
-    navigate('/dashboard');
-    return;
+    // onLogin(email, '111');
+    // navigate('/dashboard');
+    // return;
 
     fetch(`/api/auth/login`, {
       method: 'POST',
@@ -56,7 +56,7 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
       .then(data => {
         if (!data.error) {
           // After successful login, the callback is written to localStorage and enters the dashboard page
-          onLogin(email, data.token);
+          onLogin(email, data.token, data.name);
           navigate('/dashboard');
         } else {
           setMsg(data.error);
