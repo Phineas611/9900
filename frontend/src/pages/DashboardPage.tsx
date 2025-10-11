@@ -8,6 +8,7 @@ import Reports from './dashboard/Reports';
 import GeneralSettings from './dashboard/GeneralSettings';
 import OtherSettings from './dashboard/OtherSettings';
 import './DashboardPage.css';
+import UploadPage from './dashboard/UploadPage';
 
 // Definition of menu item types
 interface MenuItem {
@@ -138,6 +139,8 @@ const DashboardPage = () => {
           <Route path="/settings" element={<Navigate to="/settings/general" replace />} />
           <Route path="/settings/general" element={<GeneralSettings />} />
           <Route path="/settings/other" element={<OtherSettings />} />
+
+          <Route path="/upload" element={<UploadPage />} />
         </Routes>
       </div>
     </div>

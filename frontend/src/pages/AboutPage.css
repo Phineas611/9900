@@ -1,4 +1,4 @@
 .about-container {
   display: flex;
-  height: calc(100vh - 88px); /* Subtract the height of Navbar */
+  height: calc(100vh - 72px); /* Subtract the height of Navbar */
 }

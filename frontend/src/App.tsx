@@ -10,11 +10,12 @@ import './App.css'
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(localStorage.getItem('isLoggedIn') === 'true');
 
-  const handleLogin = (email: string, token: string) => {
+  const handleLogin = (email: string, token: string, name: string) => {
     setIsLoggedIn(true);
     localStorage.setItem('isLoggedIn', 'true');
     localStorage.setItem('email', JSON.stringify(email));
     localStorage.setItem('token', token);
+    localStorage.setItem('name', name);
   };
 
   const handleLogout = () => {
@@ -22,6 +23,7 @@ function App() {
     localStorage.removeItem('isLoggedIn');
     localStorage.removeItem('email');
     localStorage.removeItem('token');
+    localStorage.removeItem('name');
   };
 
   return (
@@ -31,16 +33,16 @@ function App() {
         <Route path="/register" element={<RegisterPage />}/>
         <Route
           path="/about"
-          element={isLoggedIn ? (<div><Navbar isLoggedIn={isLoggedIn} onLogout={handleLogout}/><AboutPage /></div>) : <Navigate to="/login" />}
+          element={isLoggedIn ? (<div><Navbar userName={localStorage.getItem('email')!!} isLoggedIn={isLoggedIn} onLogout={handleLogout}/><AboutPage /></div>) : <Navigate to="/login" />}
         />
         <Route
           path="/"
-          element={isLoggedIn ? (<div><Navbar isLoggedIn={isLoggedIn} onLogout={handleLogout}/><DashboardPage /></div>) : <Navigate to="/login" />}
+          element={isLoggedIn ? (<div><Navbar userName={localStorage.getItem('email')!!} isLoggedIn={isLoggedIn} onLogout={handleLogout}/><DashboardPage /></div>) : <Navigate to="/login" />}
         />
         <Route
           /*path="/dashboard"*/
           path="/*"
-          element={isLoggedIn ? (<div><Navbar isLoggedIn={isLoggedIn} onLogout={handleLogout}/><DashboardPage /></div>) : <Navigate to="/login" />}
+          element={isLoggedIn ? (<div><Navbar userName={localStorage.getItem('name')!!} isLoggedIn={isLoggedIn} onLogout={handleLogout}/><DashboardPage /></div>) : <Navigate to="/login" />}
         />
       </Routes>
     </Router>
