@@ -1,7 +1,8 @@
 from datetime import datetime, timezone
 from sqlalchemy import String, DateTime, Boolean
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database.setup import Base
+
 
 class User(Base):
     __tablename__ = "users"
@@ -14,3 +15,4 @@ class User(Base):
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    contracts: Mapped[list["Contract"]] = relationship("Contract", back_populates="user")

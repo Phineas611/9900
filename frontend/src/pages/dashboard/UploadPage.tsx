@@ -11,7 +11,7 @@ const UploadPage = () => {
   const navigate = useNavigate();
 
   // API base URL
-  const API_BASE_URL = 'api';
+  const API_BASE_URL = '/api';
 
   // Handle drag events
   const handleDrag = (e: React.DragEvent) => {
@@ -96,7 +96,7 @@ const UploadPage = () => {
         const formData = new FormData();
         formData.append('file', file);
 
-        const response = await fetch(`${API_BASE_URL}/uploads`, {
+        const response = await fetch(`${API_BASE_URL}/uploads/`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('token')}`,

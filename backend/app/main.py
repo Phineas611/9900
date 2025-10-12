@@ -6,6 +6,7 @@ import uvicorn
 
 from app.presentation.routes.healthcheck import router as health_router
 from app.presentation.routes.auth import router as auth_router  
+from app.presentation.routes.upload import router as upload_router
 from app.database.setup import create_tables
 from app.database import models  
 SECRET_KEY = "123456"
@@ -29,6 +30,7 @@ app.add_middleware(
 )
 app.include_router(health_router, prefix="/api")
 app.include_router(auth_router,    prefix="/api")  
+app.include_router(upload_router, prefix="/api")
 create_tables()
 
 if __name__ == "__main__":
