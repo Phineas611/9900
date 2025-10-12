@@ -21,3 +21,5 @@ contracts/
 .DS_Store
 Thumbs.db
 '@ | Out-File -Encoding utf8 .gitignore
+backend/legal_analytics_api/storage/jobs/
+backend/legal_analytics_api/outputs/
