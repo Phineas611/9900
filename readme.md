@@ -4,8 +4,9 @@
 
 IN windows system
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass  
-python3 -m venv venv  
-.\venv\Scripts\Activate.ps1  
+python -m venv venv  
+.\venv\Scripts\Activate.ps1 
+cd backend
 pip3 install -r requirements.txt
 
 ## Architecture
@@ -19,7 +20,7 @@ sqlalchemy for the database
 ## Backend
 
 -Presentation layer to handle API routes
-run uvicorn app.main:app --reload --port 5000
+uvicorn app.main:app --reload --port 5000
 docs in http://localhost:5000/docs
 
 ## Frontend
