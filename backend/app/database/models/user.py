@@ -16,3 +16,4 @@ class User(Base):
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     contracts: Mapped[list["Contract"]] = relationship("Contract", back_populates="user")
+    analysis_jobs: Mapped[list["AnalysisJob"]] = relationship("AnalysisJob", back_populates="user")

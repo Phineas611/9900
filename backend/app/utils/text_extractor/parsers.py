@@ -1,80 +1,46 @@
-# -*- coding: utf-8 -*-
 from __future__ import annotations
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Union
+from typing import Iterator
+from dataclasses import dataclass
 
-# Primary extractor
-from pdfminer.high_level import extract_pages
-from pdfminer.layout import LTTextContainer
-
-# DOCX
+import fitz  # PyMuPDF
 from docx import Document
 
+
 @dataclass
-class Chunk:
+class PageChunk:
     page: int
     text: str
 
-def iter_pdf_chunks(path: Union[str, Path]):
-    """
-    Extract text per page from a PDF.
-    Strategy:
-      1) Try pdfminer page-by-page.
-      2) If total extracted text is empty (common for tricky/embedded fonts PDFs),
-         fall back to PyMuPDF (fitz) page-by-page.
-      3) If both fail, yield empty pages (keeps page indices consistent).
-    """
-    p = Path(path)
 
-    # ---- Attempt 1: pdfminer ----
-    texts = []
-    page_num = 0
+def iter_pdf_chunks(path: Path) -> Iterator[PageChunk]:
+
+    doc = fitz.open(str(path))
     try:
-        for page_layout in extract_pages(str(p)):
-            page_num += 1
-            page_texts = []
-            for element in page_layout:
-                if isinstance(element, LTTextContainer):
-                    page_texts.append(element.get_text())
-            texts.append((page_num, "\n".join(page_texts)))
-    except Exception:
-        texts = []
+        for i, page in enumerate(doc, start=1):
+            text = page.get_text("text")
+            if text and text.strip():
+                yield PageChunk(page=i, text=text)
+    finally:
+        doc.close()
 
-    total_len = sum(len((t or "").strip()) for _, t in texts)
-    if total_len > 0:
-        for pg, t in texts:
-            yield Chunk(page=pg, text=t or "")
-        return
 
-    # ---- Attempt 2: PyMuPDF (fitz) fallback ----
-    try:
-        import fitz  # PyMuPDF
-        with fitz.open(str(p)) as doc:
-            for idx, pg in enumerate(doc, start=1):
-                # "text" mode is robust for most PDFs
-                t = pg.get_text("text") or ""
-                yield Chunk(page=idx, text=t)
-        return
-    except Exception:
-        # Fall through to empty output
-        pass
+def iter_docx_chunks(path: Path) -> Iterator[PageChunk]:
 
-    # ---- Final: yield empty pages (best-effort to preserve page count) ----
-    if page_num == 0:
-        # pdfminer didn't even enumerate pages; assume single page
-        yield Chunk(page=1, text="")
-    else:
-        for pg in range(1, page_num + 1):
-            yield Chunk(page=pg, text="")
-
-def iter_docx_chunks(path: Union[str, Path]):
-    """Iterate paragraph text from a DOCX file. Page is unknown -> 0."""
-    doc = Document(str(path))
-    buf = []
-    for para in doc.paragraphs:
+    document = Document(str(path))
+    buf: list[str] = []
+    current_len = 0
+    chunk_page = 1
+    for para in document.paragraphs:
         t = para.text.strip()
-        if t:
-            buf.append(t)
+        if not t:
+            continue
+        buf.append(t)
+        current_len += len(t) + 1
+        if current_len >= 4000:
+            yield PageChunk(page=chunk_page, text=" ".join(buf))
+            buf = []
+            current_len = 0
+            chunk_page += 1
     if buf:
-        yield Chunk(page=0, text="\n".join(buf))
+        yield PageChunk(page=chunk_page, text=" ".join(buf))
