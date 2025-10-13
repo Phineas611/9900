@@ -13,8 +13,13 @@ from .parsers import iter_pdf_chunks, iter_docx_chunks
 from .splitter import split_into_sentences
 from app.persistence.contract_repository import update_contract_processing_status
 
+
 @dataclass
 class SentenceRow:
+    """
+    A single sentence extracted from a contract file.
+    Note: contract_id maps to your DB entity id (int), not a UUID per file.
+    """
     contract_id: int
     file_name: str
     file_type: str
@@ -22,24 +27,90 @@ class SentenceRow:
     sentence_id: int
     sentence: str
 
+
 class ContractProcessor:
-    
+    """Processor for contract files (PDF/DOCX) and ZIP archives."""
+
+    # ----------------------------
+    # ZIP extraction helper
+    # ----------------------------
     @staticmethod
-    def extract_zip_files(zip_path: Path, extract_dir: Path) -> List[Path]:     
-        extracted_files = []
-        
+    def extract_zip_files(zip_path: Path, extract_dir: Path) -> List[Path]:
+        """
+        Extract supported files (.pdf, .docx) from a ZIP into extract_dir.
+        Keep nested folders inside zip (if any).
+        """
+        extracted_files: List[Path] = []
+
         with zipfile.ZipFile(zip_path, 'r') as zip_ref:
             for file_info in zip_ref.infolist():
                 if file_info.is_dir():
                     continue
-                
                 file_path = Path(file_info.filename)
                 if file_path.suffix.lower() in ['.pdf', '.docx']:
                     zip_ref.extract(file_info, extract_dir)
                     extracted_files.append(extract_dir / file_info.filename)
-        
+
         return extracted_files
-    
+
+    # ----------------------------
+    # Internal helpers for export
+    # ----------------------------
+    @staticmethod
+    def _safe_folder_name(p: Path, used: set[str]) -> str:
+        """
+        Make a safe, de-duplicated folder name for a file under the output root.
+
+        Default to <stem> (spaces -> underscores). If duplicated, fallback to
+        <stem>_<ext> (without dot), and if still duplicated, append a numeric suffix.
+        """
+        base = p.stem.replace(" ", "_")
+        candidate = base
+        ext_tag = p.suffix.lower().lstrip(".") if p.suffix else "file"
+        counter = 1
+
+        while candidate in used:
+            new_candidate = f"{base}_{ext_tag}" if counter == 1 else f"{base}_{ext_tag}-{counter}"
+            candidate = new_candidate
+            counter += 1
+
+        used.add(candidate)
+        return candidate
+
+    @staticmethod
+    def _export_df(df: pd.DataFrame, out_dir: Path, export_formats: List[str]) -> Dict[str, str]:
+        """
+        Write CSV/XLSX/TXT into out_dir. Return a dict of output file paths.
+        """
+        ensure_dir(out_dir)
+        outputs: Dict[str, str] = {}
+
+        # CSV
+        if "csv" in export_formats:
+            csv_path = out_dir / "sentences.csv"
+            df.to_csv(csv_path, index=False, encoding="utf-8")
+            outputs["csv"] = str(csv_path)
+
+        # Excel
+        if "xlsx" in export_formats:
+            xlsx_path = out_dir / "sentences.xlsx"
+            with pd.ExcelWriter(xlsx_path, engine="openpyxl") as writer:
+                df.to_excel(writer, index=False, sheet_name="sentences")
+            outputs["xlsx"] = str(xlsx_path)
+
+        # TXT (one sentence per line)
+        if "txt" in export_formats:
+            txt_path = out_dir / "sentences.txt"
+            with open(txt_path, "w", encoding="utf-8") as f:
+                for s in (df["sentence"].tolist() if not df.empty else []):
+                    f.write((s or "").strip() + "\n")
+            outputs["txt"] = str(txt_path)
+
+        return outputs
+
+    # ----------------------------
+    # Core: process list of files (PER-FILE EXPORTS)
+    # ----------------------------
     @staticmethod
     def process_files(
         file_paths: Iterable[Path],
@@ -47,29 +118,70 @@ class ContractProcessor:
         output_dir: Path,
         export_formats: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
+        """
+        Process PDF/DOCX files and export ONE SET PER INPUT FILE under:
+            <output_dir>/<file_folder>/sentences.csv|xlsx|txt
+
+        Return structure (JSON-friendly):
+        {
+          "files_processed": <int>,
+          "sentences_extracted": <int>,        # total across all files
+          "root_output_dir": "<output_dir>",
+          "per_file": [
+            {
+              "file_name": "1.pdf",
+              "file_type": "pdf",
+              "folder_name": "1",              # actual folder created
+              "output_dir": "<output_dir>/1",
+              "sentences_extracted": 123,
+              "outputs": {
+                "csv": ".../sentences.csv",
+                "xlsx": ".../sentences.xlsx",
+                "txt": ".../sentences.txt"
+              }
+            },
+            ...
+          ],
+          # Back-compat aggregate (folder_name -> outputs dict)
+          "outputs": {
+            "1": { "csv": "...", "xlsx": "...", "txt": "..." },
+            "2": { ... }
+          }
+        }
+        """
         if export_formats is None:
             export_formats = ["csv", "xlsx", "txt"]
-        
+
         ensure_dir(output_dir)
-        
-        rows: List[SentenceRow] = []
-        file_count = 0
-        
+
+        per_file: List[Dict[str, Any]] = []
+        outputs_aggregate: Dict[str, Dict[str, str]] = {}
+        total_sentences = 0
+        files_processed = 0
+        used_names: set[str] = set()  # to avoid folder name collisions
+
         for path in file_paths:
             p = Path(path)
             ftype = detect_type(p)
             if ftype is None:
+                # skip unsupported files quietly
                 continue
-            file_count += 1
+
+            files_processed += 1
             sentence_counter = 0
-            
+            rows: List[SentenceRow] = []
+
+            # Choose iterator based on file type
             chunks = iter_pdf_chunks(p) if ftype == "pdf" else iter_docx_chunks(p)
-            
+
             for ch in chunks:
-                print(f"Processing chunk: page={ch.page}, text_length={len(ch.text)}")
-                print(f"Text preview: {ch.text[:100]}...")
+                # (Debug logs; keep while stabilizing)
+                print(f"[extract] file={p.name}, page={ch.page}, text_length={len(ch.text)}")
+                preview = (ch.text or "")[:120].replace("\n", " ")
+                print(f"[extract] preview: {preview}...")
+
                 sentences = split_into_sentences(ch.text)
-                print(f"Extracted {len(sentences)} sentences")
+                print(f"[extract] page {ch.page}: {len(sentences)} sentences")
                 for s in sentences:
                     sentence_counter += 1
                     rows.append(SentenceRow(
@@ -80,33 +192,36 @@ class ContractProcessor:
                         sentence_id=sentence_counter,
                         sentence=s
                     ))
-        
-        df = pd.DataFrame([asdict(r) for r in rows])
-        
-        outputs = {}
-        if "csv" in export_formats:
-            csv_path = output_dir / "sentences.csv"
-            df.to_csv(csv_path, index=False, encoding="utf-8")
-            outputs["csv"] = str(csv_path)
-        if "xlsx" in export_formats:
-            xlsx_path = output_dir / "sentences.xlsx"
-            with pd.ExcelWriter(xlsx_path, engine="openpyxl") as writer:
-                df.to_excel(writer, index=False, sheet_name="sentences")
-            outputs["xlsx"] = str(xlsx_path)
-        if "txt" in export_formats:
-            txt_path = output_dir / "sentences.txt"
-            with open(txt_path, "w", encoding="utf-8") as f:
-                for row in rows:
-                    f.write(row.sentence.strip() + "\n")
-            outputs["txt"] = str(txt_path)
-        
+
+            df = pd.DataFrame([asdict(r) for r in rows])
+
+            # Per-file output folder name (dedup if needed)
+            folder_name = ContractProcessor._safe_folder_name(p, used_names)
+            file_out_dir = output_dir / folder_name
+            file_outputs = ContractProcessor._export_df(df, file_out_dir, export_formats)
+
+            total_sentences += int(len(df))
+            per_file.append({
+                "file_name": p.name,
+                "file_type": ftype,
+                "folder_name": folder_name,
+                "output_dir": str(file_out_dir),
+                "sentences_extracted": int(len(df)),
+                "outputs": file_outputs
+            })
+            outputs_aggregate[folder_name] = file_outputs
+
         return {
-            "files_processed": file_count,
-            "sentences_extracted": int(len(df)),
-            "output_dir": str(output_dir),
-            "outputs": outputs,
+            "files_processed": files_processed,
+            "sentences_extracted": total_sentences,
+            "root_output_dir": str(output_dir),
+            "per_file": per_file,
+            "outputs": outputs_aggregate,  # back-compat convenience map
         }
-    
+
+    # ----------------------------
+    # High-level: one contract job
+    # ----------------------------
     @staticmethod
     def process_contract(
         db: Session,
@@ -115,46 +230,60 @@ class ContractProcessor:
         file_path: str,
         file_type: str
     ) -> Dict[str, Any]:
+        """
+        Orchestrates a contract processing job:
+        - Update status (processing -> completed/failed)
+        - If .zip: extract supported files, then process all extracted
+        - Else: process the single file
+        - Export one set per file into: outputs/<user_id>/<contract_id>/<file_stem>/
+        - Return a summary dict
+        """
         try:
-           
+            # 1) mark processing
             update_contract_processing_status(
                 db=db,
                 contract_id=contract_id,
                 user_id=user_id,
                 status="processing"
             )
-            
+
             file_path_obj = Path(file_path)
+            # Root output dir for this user+contract (relative to backend working dir)
             output_dir = Path("outputs") / str(user_id) / str(contract_id)
             ensure_dir(output_dir)
-            all_sentences = []
-            
-            if file_type == ".zip":
-               
+
+            if file_type.lower() == ".zip":
+                # Extract and process extracted files
                 extract_dir = output_dir / "extracted"
                 ensure_dir(extract_dir)
-                
                 extracted_files = ContractProcessor.extract_zip_files(file_path_obj, extract_dir)
-                result = ContractProcessor.process_files(extracted_files, contract_id, output_dir)
+                result = ContractProcessor.process_files(
+                    extracted_files, contract_id, output_dir
+                )
             else:
-               
-                result = ContractProcessor.process_files([file_path_obj], contract_id, output_dir)
-            
-           
+                # Single file
+                result = ContractProcessor.process_files(
+                    [file_path_obj], contract_id, output_dir
+                )
+
+            # 2) mark completed
             update_contract_processing_status(
                 db=db,
                 contract_id=contract_id,
                 user_id=user_id,
                 status="completed"
             )
-            
+
+            # 3) return detailed summary
             return {
                 "contract_id": contract_id,
                 "total_sentences": result["sentences_extracted"],
-                "outputs": result["outputs"],
+                "root_output_dir": result["root_output_dir"],
+                "outputs": result["outputs"],     # folder_name -> file paths
+                "per_file": result["per_file"],   # detailed per-file entries
                 "status": "completed"
             }
-            
+
         except Exception as e:
             update_contract_processing_status(
                 db=db,
@@ -162,4 +291,5 @@ class ContractProcessor:
                 user_id=user_id,
                 status="failed"
             )
+            # Bubble up for API error handling layer to catch
             raise e
