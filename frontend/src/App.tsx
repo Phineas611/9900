@@ -1,11 +1,13 @@
 import { useState } from 'react'
-import { BrowserRouter as Router, Routes, Route, Navigate } from'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import AboutPage from './pages/AboutPage';
 import DashboardPage from './pages/DashboardPage';
 import './App.css'
+import ExtractAndClassifyPage from './pages/ExtractAndClassifyPage';
+import ExplainPage from './pages/ExplainPage';
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(localStorage.getItem('isLoggedIn') === 'true');
@@ -29,20 +31,39 @@ function App() {
   return (
     <Router>
       <Routes>
-        <Route path="/login" element={<LoginPage onLogin={handleLogin}/>}/>
-        <Route path="/register" element={<RegisterPage />}/>
+        <Route path="/login" element={<LoginPage onLogin={handleLogin} />} />
+        <Route path="/register" element={<RegisterPage />} />
         <Route
           path="/about"
-          element={isLoggedIn ? (<div><Navbar userName={localStorage.getItem('email')!!} isLoggedIn={isLoggedIn} onLogout={handleLogout}/><AboutPage /></div>) : <Navigate to="/login" />}
+          element={isLoggedIn ? (
+            <div>
+              <Navbar userName={localStorage.getItem('email')!!} isLoggedIn={isLoggedIn} onLogout={handleLogout} />
+              <AboutPage />
+            </div>
+          ) : <Navigate to="/login" />}
         />
         <Route
           path="/"
-          element={isLoggedIn ? (<div><Navbar userName={localStorage.getItem('email')!!} isLoggedIn={isLoggedIn} onLogout={handleLogout}/><DashboardPage /></div>) : <Navigate to="/login" />}
+          element={isLoggedIn ? (
+            <div>
+              <Navbar userName={localStorage.getItem('email')!!} isLoggedIn={isLoggedIn} onLogout={handleLogout} />
+              <DashboardPage />
+            </div>
+          ) : <Navigate to="/login" />}
         />
+
+        <Route path="/extract-classify" element={<ExtractAndClassifyPage />} />
+        <Route path="/explain" element={<ExplainPage />} />
+
         <Route
           /*path="/dashboard"*/
           path="/*"
-          element={isLoggedIn ? (<div><Navbar userName={localStorage.getItem('name')!!} isLoggedIn={isLoggedIn} onLogout={handleLogout}/><DashboardPage /></div>) : <Navigate to="/login" />}
+          element={isLoggedIn ? (
+            <div>
+              <Navbar userName={localStorage.getItem('name')!!} isLoggedIn={isLoggedIn} onLogout={handleLogout} />
+              <DashboardPage />
+            </div>
+          ) : <Navigate to="/login" />}
         />
       </Routes>
     </Router>
