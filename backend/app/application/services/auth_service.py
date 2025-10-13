@@ -23,7 +23,6 @@ class AuthService:
         if not verify_password(payload.password, user.password_hash):
             raise HTTPException(status_code=401, detail="Invalid email or password")
 
-        # 生成会话 token（签名串），我们也返回给前端备用
         token = sign_session(user.id)
 
         return LoginResponse(id=user.id, email=user.email, name=user.name, token=token)
