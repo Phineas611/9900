@@ -13,6 +13,12 @@ from .parsers import iter_pdf_chunks, iter_docx_chunks
 from .splitter import split_into_sentences
 from app.persistence.contract_repository import update_contract_processing_status
 
+# Anchor output root under the backend directory (not repository root).
+# pipeline.py is at: backend/app/utils/text_extractor/pipeline.py
+# parents[3] => backend/
+BACKEND_DIR = Path(__file__).resolve().parents[3]
+DEFAULT_OUTPUT_ROOT = BACKEND_DIR / "outputs"
+
 
 @dataclass
 class SentenceRow:
@@ -81,7 +87,11 @@ class ContractProcessor:
     def _export_df(df: pd.DataFrame, out_dir: Path, export_formats: List[str]) -> Dict[str, str]:
         """
         Write CSV/XLSX/TXT into out_dir. Return a dict of output file paths.
+        If the DataFrame is empty, skip writing files to avoid empty artifacts.
         """
+        if df.empty:
+            return {}
+
         ensure_dir(out_dir)
         outputs: Dict[str, str] = {}
 
@@ -102,7 +112,7 @@ class ContractProcessor:
         if "txt" in export_formats:
             txt_path = out_dir / "sentences.txt"
             with open(txt_path, "w", encoding="utf-8") as f:
-                for s in (df["sentence"].tolist() if not df.empty else []):
+                for s in df["sentence"].tolist():
                     f.write((s or "").strip() + "\n")
             outputs["txt"] = str(txt_path)
 
@@ -175,7 +185,7 @@ class ContractProcessor:
             chunks = iter_pdf_chunks(p) if ftype == "pdf" else iter_docx_chunks(p)
 
             for ch in chunks:
-                # (Debug logs; keep while stabilizing)
+                # Debug logs helpful while stabilizing extraction across PDFs
                 print(f"[extract] file={p.name}, page={ch.page}, text_length={len(ch.text)}")
                 preview = (ch.text or "")[:120].replace("\n", " ")
                 print(f"[extract] preview: {preview}...")
@@ -235,7 +245,7 @@ class ContractProcessor:
         - Update status (processing -> completed/failed)
         - If .zip: extract supported files, then process all extracted
         - Else: process the single file
-        - Export one set per file into: outputs/<user_id>/<contract_id>/<file_stem>/
+        - Export one set per file into: backend/outputs/<user_id>/<contract_id>/<file_stem>/
         - Return a summary dict
         """
         try:
@@ -248,8 +258,9 @@ class ContractProcessor:
             )
 
             file_path_obj = Path(file_path)
-            # Root output dir for this user+contract (relative to backend working dir)
-            output_dir = Path("outputs") / str(user_id) / str(contract_id)
+
+            # Root output dir for this user+contract anchored under backend/
+            output_dir = DEFAULT_OUTPUT_ROOT / str(user_id) / str(contract_id)
             ensure_dir(output_dir)
 
             if file_type.lower() == ".zip":
