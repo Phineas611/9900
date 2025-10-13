@@ -1,0 +1,15 @@
+contract_id,file_name,file_type,page,sentence_id,sentence
+27,de2ab0b4-6881-4420-9103-96f26459f37e.pdf,pdf,1,1,COMP 4418 – Exercise Sheet: Game Theory I Exercise I: Iterated Dominance Consider the following two games.
+27,de2ab0b4-6881-4420-9103-96f26459f37e.pdf,pdf,1,2,"Find all Pareto-optimal outcomes and decide whether the games can be solved by iterated strict dominance. a) w x y z a b c d b) b1 b2 a1 (2, 3, 2) (0, 5, 2) a2 (1, 4, 1) (2, 1, 1) a3 (1, 1, 1) (5, 4, 2) c1 b1 b2 a1 (4, 5, 1) (1, 0, 1) a2 (2, 0, 3) (1, 5, 3) a3 (1, 2, 0) (2, 2, 1) c2 Exercise II: Maximin Strategies and Security Levels a) Consider the following formulation of rock-paper-scissors."
+27,de2ab0b4-6881-4420-9103-96f26459f37e.pdf,pdf,1,3,What are the maximin strategies and the security levels of both players?
+27,de2ab0b4-6881-4420-9103-96f26459f37e.pdf,pdf,1,4,R P S R -1 -1 P -1 -1 S -1 -1 b) Model the situation with well as a fourth option that beats rock and scissor but loses again paper.
+27,de2ab0b4-6881-4420-9103-96f26459f37e.pdf,pdf,1,5,What are the maximin strategies and the security levels of both players?
+27,de2ab0b4-6881-4420-9103-96f26459f37e.pdf,pdf,2,6,COMP 4418 – Exercise Sheet: Game Theory I c) Assume there is lava as a fourth option.
+27,de2ab0b4-6881-4420-9103-96f26459f37e.pdf,pdf,2,7,"Lava beats all other option, but if both players play lava, they experience a super lose with a utility of −100."
+27,de2ab0b4-6881-4420-9103-96f26459f37e.pdf,pdf,2,8,What are the maximin strategies and the security levels of both players?
+27,de2ab0b4-6881-4420-9103-96f26459f37e.pdf,pdf,2,9,"Exercise III: Independence Assume that A = {a,b,c} and let ≿denote a rational and independent preference relation on L (A) such that [1 : a] ≻[1 : b] and [1 2 : b, 1 2 : c] ∼[2 3 : a, 1 3 : c]."
+27,de2ab0b4-6881-4420-9103-96f26459f37e.pdf,pdf,2,10,"Show the following statements. a) [1 : c] ≻[1 : a]. b) If ≿is additionally continuous, then it can be represented by the vNM utility function u given by u(c) = 1, u(a) = 1 4, u(b) = 0."
+27,de2ab0b4-6881-4420-9103-96f26459f37e.pdf,pdf,2,11,"Exercise Sheet IV: Preferences over Lotteries Let ≿denote the rational preference relation over a set A = {x1,...,xm} given by x1 ≻x2 ≻ ··· ≻xm."
+27,de2ab0b4-6881-4420-9103-96f26459f37e.pdf,pdf,2,12,"Decide for each of the following relations on L (A) whether they are rational, continuous, and transitive."
+27,de2ab0b4-6881-4420-9103-96f26459f37e.pdf,pdf,2,13,"Prove your answers! a) The relation ≿1 is defined by L1 ≿1 L2 if and only if x ≿y for all x,y ∈A with L1(x) > 0 and L2(y) > 0. b) We define max(≿,X) as the most preferred alternative in X with respect to ≿and ∆(L1,L2) = max(≿,{x ∈A: L1(x) ̸= L2(x)})."
+27,de2ab0b4-6881-4420-9103-96f26459f37e.pdf,pdf,2,14,"The relation ≿2 is defined by L1 ≿2 L2 if and only if L1 = L2 or L1(∆(L1,L2)) ≥ L2(∆(L1,L2)). c) The relation ≿3 is defined by L1 ≿3 L2 if and only if L1(x1) ≥L2(x1)."
