@@ -10,6 +10,8 @@ from sqlalchemy.orm import Session
 from app.database.setup import get_db
 from app.persistence.contract_repository import update_contract_processing_status
 from app.utils.text_extractor import ContractProcessor
+from app.database.models.analysis_job import AnalysisJob
+from datetime import datetime, timezone
 
 
 class BackgroundProcessor:
@@ -24,7 +26,8 @@ class BackgroundProcessor:
         contract_id: int,
         user_id: int,
         file_path: str,
-        file_type: str
+        file_type: str,
+        job_id: str,  # 新增参数
     ):
         """
         异步处理合同文件
@@ -42,41 +45,62 @@ class BackgroundProcessor:
         """
         def process_in_background():
             try:
-                # 获取数据库会话
                 db = next(get_db())
-                
-                # 更新状态为处理中
+
+                # 合同状态：processing
                 update_contract_processing_status(
                     db=db,
                     contract_id=contract_id,
                     user_id=user_id,
                     status="processing"
                 )
-                
-                # 处理文件
-                ContractProcessor.process_contract(
+
+                # 作业状态：PROCESSING + started_at
+                job = db.get(AnalysisJob, job_id)
+                if job:
+                    job.status = "PROCESSING"
+                    job.started_at = datetime.now(timezone.utc)
+                    db.commit()
+
+                # 实际处理
+                result = ContractProcessor.process_contract(
                     db=db,
                     contract_id=contract_id,
                     user_id=user_id,
                     file_path=file_path,
                     file_type=file_type
                 )
-                
+
+                # 作业状态：COMPLETED + finished_at + 汇总字段
+                if job:
+                    job.status = "COMPLETED"
+                    job.finished_at = datetime.now(timezone.utc)
+                    job.progress_pct = 100.0
+                    job.total_sentences = int(result.get("sentences_extracted", 0))
+                    if job.started_at and job.finished_at:
+                        job.duration_seconds = (job.finished_at - job.started_at).total_seconds()
+                    db.commit()
+
                 print(f"Background processing completed for contract {contract_id}")
-                
             except Exception as e:
-                # 处理失败，更新状态
                 try:
                     db = next(get_db())
+                    # 合同状态：failed
                     update_contract_processing_status(
                         db=db,
                         contract_id=contract_id,
                         user_id=user_id,
                         status="failed"
                     )
+                    # 作业状态：FAILED + finished_at
+                    job = db.get(AnalysisJob, job_id)
+                    if job:
+                        job.status = "FAILED"
+                        job.finished_at = datetime.now(timezone.utc)
+                        job.progress_pct = 0.0
+                        db.commit()
                 except:
                     pass
-                
                 print(f"Background processing failed for contract {contract_id}: {e}")
         
         # 在后台线程中执行
