@@ -20,6 +20,9 @@ class Contract(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     user: Mapped["User"] = relationship("User", back_populates="contracts")
     
+    analysis_jobs: Mapped[list["AnalysisJob"]] = relationship("AnalysisJob", back_populates="contract", cascade="all, delete-orphan")
+    sentences: Mapped[list["ContractSentence"]] = relationship("ContractSentence", back_populates="contract", cascade="all, delete-orphan")
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
