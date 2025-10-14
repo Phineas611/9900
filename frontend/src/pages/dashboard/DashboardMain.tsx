@@ -25,7 +25,7 @@ interface UploadItem {
 
 interface ActivityItem {
   id: string;
-  type: 'Model Update' | 'New Feature' | 'System Update';
+  type: string; // accept any backend event_type
   title: string;
   description: string;
   timestamp: string;
@@ -52,98 +52,89 @@ const DashboardMain = () => {
   const [totalItems, setTotalItems] = useState(0);
 
   // API Base URL
-  const API_BASE_URL = 'api';
+  const API_BASE_URL = import.meta.env.VITE_API_URL ?? '/api';
 
   // Obtain statistical data
   const fetchStats = async (): Promise<StatsData> => {
-    const mockStats: StatsData = {
-      contractsProcessed: 1245,
-      growthPercentage: 12.5,
-      certificatesGenerated: 1245,
-      certificatesChange: 8.2,
-      averageScore: 8.7,
-      scoreChange: 0.5,
-      averageTime: 4.5,
-      timeChange: -3.2
-    };
-    return mockStats;
-
-    const response = await fetch(`${API_BASE_URL}/dashboard/stats`, {
+    const response = await fetch(`${API_BASE_URL}/analytics/kpi`, {
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('token')}`,
         'Content-Type': 'application/json',
       },
     });
-    
     if (!response.ok) {
       throw new Error('Failed to fetch stats data');
     }
-    
-    const result: ApiResponse<StatsData> = await response.json();
-    return result.data;
+    const result = await response.json();
+    const mapped: StatsData = {
+      contractsProcessed: result.total_contracts ?? 0,
+      growthPercentage: result.growth_percentage ?? 0,
+      certificatesGenerated: result.total_sentences ?? 0,
+      certificatesChange: result.certificates_change_pct ?? 0,
+      averageScore: result.avg_explanation_clarity ?? 0,
+      scoreChange: result.score_change ?? 0,
+      averageTime: Math.round(((result.avg_analysis_time_sec ?? 0) / 60) * 10) / 10,
+      timeChange: result.time_change_pct ?? 0,
+    };
+    return mapped;
+  };
+
+  // Normalize backend status values to UI-friendly labels
+  const mapStatus = (raw: any): UploadItem['status'] => {
+    const v = String(raw ?? '').toLowerCase();
+    if (v === 'completed' || v === 'success' || v === 'done') return 'Completed';
+    if (v === 'processing' || v === 'running' || v === 'in_progress') return 'Processing';
+    if (v === 'failed' || v === 'error') return 'Failed';
+    // default
+    return 'Completed';
   };
 
   // Retrieve upload records
   const fetchUploads = async (page: number, limit: number): Promise<{ items: UploadItem[]; total: number }> => {
-    return {items: [], total: 0}
-    const response = await fetch(
-      `${API_BASE_URL}/uploads?page=${page}&limit=${limit}&sortBy=uploadedAt&sortOrder=desc`,
-      {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json',
-        },
-      }
-    );
-    
-    if (!response.ok) {
-      throw new Error('Failed to fetch uploads data');
-    }
-    
-    const result: ApiResponse<{ items: UploadItem[]; total: number }> = await response.json();
-    return result.data;
-  };
-
-  // Get Recent Events
-  const fetchActivities = async (): Promise<ActivityItem[]> => {
-    const mockActivities: ActivityItem[] = [
-      {
-        id: 'activity-1',
-        type: 'Model Update',
-        title: 'Contract Analysis Model v2.1 Released',
-        description: 'Improved accuracy and faster processing times',
-        timestamp: '2023-10-15 14:30'
-      },
-      {
-        id: 'activity-2',
-        type: 'New Feature',
-        title: 'Batch Processing Now Available',
-        description: 'Upload multiple contracts at once for analysis',
-        timestamp: '2023-10-10 09:15'
-      },
-      {
-        id: 'activity-3',
-        type: 'System Update',
-        title: 'Scheduled Maintenance Completed',
-        description: 'System upgrades performed during off-peak hours',
-        timestamp: '2023-10-05 18:45'
-      }
-    ];
-    return  mockActivities;
-
-    const response = await fetch(`${API_BASE_URL}/activities/recent`, {
+    const response = await fetch(`${API_BASE_URL}/uploads/recent?limit=100`, {
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('token')}`,
         'Content-Type': 'application/json',
       },
     });
-    
+    if (!response.ok) {
+      throw new Error('Failed to fetch uploads data');
+    }
+    const rows = await response.json();
+    const mapped: UploadItem[] = (rows || []).map((row: any) => ({
+      id: String(row.job_id ?? row.id ?? Math.random()),
+      fileName: row.file_name ?? 'Unknown',
+      fileType: row.file_type ?? 'Unknown',
+      uploadedAt: row.uploaded_at ?? '',
+      status: mapStatus(row.status),
+      analysis: row.total_sentences != null ? `${row.total_sentences} sentences` : undefined,
+    }));
+    const total = mapped.length;
+    const start = (page - 1) * limit;
+    const end = start + limit;
+    return { items: mapped.slice(start, end), total };
+  };
+
+  // Get Recent Events
+  const fetchActivities = async (): Promise<ActivityItem[]> => {
+  const response = await fetch(`${API_BASE_URL}/activity/recent?limit=5`, {
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        'Content-Type': 'application/json',
+      },
+    });
     if (!response.ok) {
       throw new Error('Failed to fetch activities data');
     }
-    
-    const result: ApiResponse<ActivityItem[]> = await response.json();
-    return result.data;
+    const rows = await response.json();
+    const mapped: ActivityItem[] = (rows || []).map((row: any) => ({
+      id: String(row.id ?? Math.random()),
+      type: String(row.event_type ?? 'System Update'),
+      title: row.title ?? '',
+      description: row.message ?? '',
+      timestamp: row.created_at ?? '',
+    }));
+    return mapped;
   };
 
   // Load all data
@@ -226,7 +217,7 @@ const DashboardMain = () => {
           <div className="stat-card">
             <div className="stat-header">
               <div className="stat-title">Analyzed Contracts</div>
-              <div className="stat-icon">📊</div>
+              <div className="stat-icon"></div>
             </div>
             <div className="stat-value">{stats.contractsProcessed}</div>
             <div className="stat-label">Total Contracts processed</div>
@@ -238,7 +229,7 @@ const DashboardMain = () => {
           <div className="stat-card">
             <div className="stat-header">
               <div className="stat-title">Analyzed Contracts</div>
-              <div className="stat-icon">⚠️</div>
+              <div className="stat-icon"></div>
             </div>
             <div className="stat-value">{stats.certificatesGenerated}</div>
             <div className="stat-label">Sentences resulting classification</div>
@@ -250,7 +241,7 @@ const DashboardMain = () => {
           <div className="stat-card">
             <div className="stat-header">
               <div className="stat-title">Analyzed Contracts</div>
-              <div className="stat-icon">✔️</div>
+              <div className="stat-icon"></div>
             </div>
             <div className="stat-value">{stats.averageScore}/10</div>
             <div className="stat-label">Average explanation diarty</div>
@@ -262,7 +253,7 @@ const DashboardMain = () => {
           <div className="stat-card">
             <div className="stat-header">
               <div className="stat-title">Analyzed Contracts</div>
-              <div className="stat-icon">🕒</div>
+              <div className="stat-icon"></div>
             </div>
             <div className="stat-value">{stats.averageTime} min</div>
             <div className="stat-label">Average analysis time</div>
@@ -302,17 +293,17 @@ const DashboardMain = () => {
                     </span>
                   </td>
                   <td className="analysis">
-                    {upload.analysis || '—'}
+                    {upload.analysis || ''}
                   </td>
                   <td className="actions">
                     <button className="action-btn" title="View analysis">
-                      👁️
+                      
                     </button>
                     <button className="action-btn" title="Download report">
-                      📄
+                      
                     </button>
                     <button className="action-btn" title="Share">
-                      🔗
+                      
                     </button>
                   </td>
                 </tr>
