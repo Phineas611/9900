@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 DATA_ROOT = Path(__file__).resolve().parents[2] / "storage" / "jobs"
 
-DEFAULT_TZ = timezone.utc  # 生产可换成本地时区
+DEFAULT_TZ = timezone.utc
 
 def _job_dir(job_id: str) -> Path:
     d = DATA_ROOT / job_id

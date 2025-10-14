@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import SentenceTable from '../components/SentenceTable';
 
-// ✅ 修正：用 type-only 导入 SentenceItem
 import type { SentenceItem } from '../services/api';
 import { mock /*, classify, explainBatch, getExtractedSentences */ } from '../services/api';
 
