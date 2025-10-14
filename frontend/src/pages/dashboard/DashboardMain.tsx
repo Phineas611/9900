@@ -52,7 +52,7 @@ const DashboardMain = () => {
   const [totalItems, setTotalItems] = useState(0);
 
   // API Base URL
-  const API_BASE_URL = import.meta.env.VITE_API_URL ?? '/api';
+  const API_BASE_URL = '/api';
 
   // Obtain statistical data
   const fetchStats = async (): Promise<StatsData> => {

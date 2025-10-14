@@ -11,6 +11,18 @@ dl, ol, ul {
     margin-bottom: 1rem;
 }
 
+.login-container {
+    background: linear-gradient(rgba(0, 0, 0, 0.3), rgba(0, 0, 0, 0.6)), url('../assets/background.jpg');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
 .login {
     width: 520px;
     background-color: #ffffff;
@@ -88,7 +100,7 @@ dl, ol, ul {
     width: 100%;
     padding: 15px;
     margin-top: 20px;
-    background-color: #666;
+    background-color: #2288cc;
     border: 0;
     cursor: pointer;
     font-weight: bold;
@@ -97,7 +109,7 @@ dl, ol, ul {
 }
 
 .login form input[type="submit"]:hover {
-    background-color: #888;
+    background-color: #3399dd;
     transition: background-color 0.2s;
 }
 

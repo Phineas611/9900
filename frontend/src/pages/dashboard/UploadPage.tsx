@@ -7,11 +7,12 @@ const UploadPage = () => {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
-
+  
   // API base URL
-const API_BASE_URL = import.meta.env.VITE_API_URL ?? '/api';
+  const API_BASE_URL = '/api';
 
   // Handle drag events
   const handleDrag = (e: React.DragEvent) => {
@@ -115,9 +116,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL ?? '/api';
 
       // Upload completed successfully
       setSelectedFiles([]);
-      alert('Files uploaded successfully!');
-      navigate('/dashboard');
-
+      setShowSuccessModal(true);
     } catch (err) {
       console.error('Upload error:', err);
       setError(err instanceof Error ? err.message : 'File upload failed');
@@ -141,6 +140,11 @@ const API_BASE_URL = import.meta.env.VITE_API_URL ?? '/api';
   // Trigger file input click
   const triggerFileInput = () => {
     fileInputRef.current?.click();
+  };
+
+  const handleModalClose = () => {
+    setShowSuccessModal(false);
+    navigate('/dashboard_main');
   };
 
   return (
@@ -269,6 +273,29 @@ const API_BASE_URL = import.meta.env.VITE_API_URL ?? '/api';
           </div>
         </div>
       </div>
+
+      {/* Success Modal */}
+      {showSuccessModal && (
+        <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }} tabIndex={-1}>
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">Upload Successful</h5>
+              </div>
+              <div className="modal-body">
+                <div className="text-center">
+                  <div className="mb-3" style={{ fontSize: '2rem' }}>Successfully uploaded</div>
+                  <p>Your files have been uploaded successfully!</p>
+                  <p className="text-muted">You will be redirected to the dashboard.</p>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-success" onClick={handleModalClose}>Go to Dashboard</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

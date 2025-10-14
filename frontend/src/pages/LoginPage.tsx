@@ -54,12 +54,13 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
         return response.json();
       })
       .then(data => {
-        if (!data.error) {
+        console.log(data);
+        if (!data.detail) {
           // After successful login, the callback is written to localStorage and enters the dashboard page
           onLogin(email, data.token, data.name);
-          navigate('/dashboard');
+          navigate('/dashboard_main');
         } else {
-          setMsg(data.error);
+          setMsg(data.detail);
         }
       })
       .catch(error => {
@@ -68,6 +69,7 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
   };
 
   return (
+  <div className="login-container">
     <div className="login">
       <h1>Legal Contract Analyzer - Login</h1>
       <div className="links">
@@ -105,6 +107,7 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
         <input type="submit" value="Login" />
       </form>
     </div>
+  </div>
   );
 };
 
