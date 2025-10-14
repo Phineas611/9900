@@ -9,7 +9,7 @@ interface NavbarProps {
 const Navbar = ({ isLoggedIn, onLogout, userName }: NavbarProps) => {
   const [isSearchActive, setIsSearchActive] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
-  const [searchValue, setSearchValue] = useState(''); // 新增：管理搜索值状态
+  const [searchValue, setSearchValue] = useState('');
   const searchContainerMobileRef = useRef<HTMLDivElement>(null);
   const searchContainerDesktopRef = useRef<HTMLDivElement>(null);
   const searchInputMobileRef = useRef<HTMLInputElement>(null);
