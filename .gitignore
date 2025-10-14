@@ -1,25 +1,21 @@
-venv/
-﻿@'
 # Python
 __pycache__/
-*.py[cod]
-*.egg-info/
-
-# Virtual env
+*.pyc
 .venv/
+venv/
+.env
 
-# App runtime/output
-backend/contract_sentence_extractor/outputs/
-backend/contract_sentence_extractor/uploaded/
+# Node/Frontend
+node_modules/
+.next/
+dist/
+build/
 
-# Local test data
-contracts/
-*.pdf
-*.docx
-
-# OS/editor
+# OS/IDE
 .DS_Store
-Thumbs.db
-'@ | Out-File -Encoding utf8 .gitignore
-backend/legal_analytics_api/storage/jobs/
-backend/legal_analytics_api/outputs/
+.vscode/
+.idea/
+
+# App outputs/temp
+outputs/
+tmp/

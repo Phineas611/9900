@@ -169,6 +169,8 @@ class ContractProcessor:
         total_sentences = 0
         files_processed = 0
         used_names: set[str] = set()  # to avoid folder name collisions
+        # Collect rows across all files for a root-level aggregate export
+        all_rows: List[SentenceRow] = []
 
         for path in file_paths:
             p = Path(path)
@@ -204,6 +206,8 @@ class ContractProcessor:
                     ))
 
             df = pd.DataFrame([asdict(r) for r in rows])
+            # Accumulate for aggregate root-level export
+            all_rows.extend(rows)
 
             # Per-file output folder name (dedup if needed)
             folder_name = ContractProcessor._safe_folder_name(p, used_names)
@@ -227,6 +231,15 @@ class ContractProcessor:
             "root_output_dir": str(output_dir),
             "per_file": per_file,
             "outputs": outputs_aggregate,  # back-compat convenience map
+            # Root-level aggregate outputs (CSV/XLSX/TXT) for download endpoint compatibility
+            # Note: written only if there are sentences
+            **(lambda agg: {"root_outputs": agg} if agg else {})(
+                ContractProcessor._export_df(
+                    pd.DataFrame([asdict(r) for r in all_rows]),
+                    output_dir,
+                    export_formats
+                )
+            )
         }
 
     # ----------------------------
