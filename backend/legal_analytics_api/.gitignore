@@ -1,0 +1,17 @@
+@"
+# Python/venv
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# IDE/OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# runtime outputs
+services/legal_analytics_api/storage/jobs/
+services/legal_analytics_api/outputs/
+"@ | Out-File -Encoding utf8 -Append ".\.gitignore"
