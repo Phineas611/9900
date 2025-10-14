@@ -17,6 +17,7 @@ from app.application.models.contract import (
 )
 from app.utils.text_extractor import ContractProcessor
 from app.database.models.activity_log import ActivityLog
+from app.database.models.analysis_job import AnalysisJob
 
 class UploadService:
 
@@ -115,11 +116,25 @@ class UploadService:
             )
             
 
+            # 新增：创建 AnalysisJob（QUEUED）
+            job = AnalysisJob(
+                id=str(uuid.uuid4()),
+                user_id=user_id,
+                contract_id=contract.id,
+                file_name=file.filename,
+                file_type=Path(file.filename).suffix.lower(),
+                file_size=file.size if hasattr(file, 'size') else 0,
+                status="QUEUED",
+            )
+            db.add(job)
+            db.commit()
+
             BackgroundProcessor.process_contract_async(
                 contract_id=contract.id,
                 user_id=user_id,
                 file_path=str(file_path),
-                file_type=Path(file.filename).suffix.lower()
+                file_type=Path(file.filename).suffix.lower(),
+                job_id=job.id,  # 传递 job_id 以便后台更新
             )
             
             return FileUploadResponse(
