@@ -113,7 +113,7 @@ const DashboardPage = () => {
       {/* Sidebar */}
       <div className={`sidebar ${isCollapsed ? 'collapsed' : ''}`}>
         <div className="sidebar-header">
-          {!isCollapsed && <h2>System Submenu</h2>}
+          {!isCollapsed && <h2>MENU</h2>}
           <button 
             className="collapse-btn"
             onClick={() => setIsCollapsed(!isCollapsed)}

@@ -11,6 +11,7 @@ const RegisterPage = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [name, setName] = useState('');
   const [msg, setMsg] = useState('');
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   // Verify the correctness of the email address
   const validateEmail = (email: string) => {
@@ -62,13 +63,10 @@ const RegisterPage = () => {
         return response.json();
       })
       .then(data => {
-        if (!data.error) {
-          if (window.confirm("Successfully registered")) {
-            // Callback redirects to login page
-            navigate('/login');
-          }
+        if (!data.detail) {
+          setShowSuccessModal(true);
         } else {
-          setMsg(data.error);
+          setMsg(data.detail);
         }
       })
       .catch(error => {
@@ -76,8 +74,15 @@ const RegisterPage = () => {
       });
   };
 
+  const handleModalClose = () => {
+    setShowSuccessModal(false);
+    // Callback redirects to login page
+    navigate('/login');
+  };
+
   return (
-    <>
+  <>
+    <div className="register-container">
       <div className="register">
         <h1>Legal Contract Analyzer - Register</h1>
         <div className="links">
@@ -142,7 +147,31 @@ const RegisterPage = () => {
         </form>
 
       </div>
-    </>
+
+      {/* Success Modal */}
+      {showSuccessModal && (
+        <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }} tabIndex={-1}>
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">Registration Successful</h5>
+              </div>
+              <div className="modal-body">
+                <div className="text-center">
+                  <div className="mb-3" style={{ fontSize: '2rem' }}>Registered successfully</div>
+                  <p>Your account has been successfully registered!</p>
+                  <p className="text-muted">You will be redirected to the login page.</p>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-success" onClick={handleModalClose}>Go to Login</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  </>
   );
 };
 

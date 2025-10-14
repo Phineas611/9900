@@ -7,12 +7,12 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost:5050',
+        target: 'https://legalcontractanalyzer-backend.onrender.com',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, '/api')
       },
       '/static': {
-        target: 'http://localhost:5050',
+        target: 'https://legalcontractanalyzer-backend.onrender.com',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/static/, '/static')
       }
