@@ -39,6 +39,19 @@ const DashboardPage = () => {
       path: '/contracts'
     },
     {
+      key: 'extract',
+      label: 'Extract & Classify',
+      icon: '🧩',
+      path: '/extract-classify'
+
+    },
+    {
+      key: 'explain',
+      label: 'Explain (One)',
+      icon: '💬',
+      path: '/explain'
+    },
+    {
       key: 'model comparison',
       label: 'Model Comparison',
       icon: '🧠',
