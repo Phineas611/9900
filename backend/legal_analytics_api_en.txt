@@ -1,0 +1,306 @@
+Legal Analytics API — Interface Reference & Test Guide (EN)
+
+============================================================
+Basic Information
+============================================================
+- Base URL: http://127.0.0.1:5000/
+- Swagger UI: http://127.0.0.1:5000/docs
+
+Authentication
+- Most jobs/* endpoints: no login required.
+- Business endpoints that require a session (e.g., contracts/*/sentences/import): first call POST /api/auth/login to obtain a session cookie.
+
+Data Persistence (File-Storage Variant)
+- Pointer: backend/legal_analytics_api/storage/jobs/<job_id>/pointer.txt
+  (the file content is the absolute path of outputs_dir)
+- Upload records: backend/legal_analytics_api/storage/jobs/<job_id>/uploads.jsonl
+  (one JSON object per line)
+
+============================================================
+Core Concept: Job
+============================================================
+A Job is a unique identifier for one contract-analysis task/session. It is used to group the output data
+of one user and one contract (or a batch of contracts) under the same “query dimension.”
+
+The API only takes job_id; via the pointer file, it locates the real sentences.csv directory. This decouples
+the physical data location from the API surface.
+
+Common naming pattern: user{user_id}-contract{contract_id} (e.g., user8-contract35).
+
+============================================================
+Requirements for sentences.csv
+============================================================
+- Required columns: contract_id, file_name, sentence
+- Optional columns: page (defaults to 1 if missing), section, subsection, sentence_idx
+- If any required column is missing, analytics endpoints will return 400.
+
+============================================================
+Recommended Test Flow (Auto Register First — strongly recommended)
+============================================================
+1) Auto Register → obtain job_id & register the pointer
+2) Analytics → GET /api/jobs/{job_id}/analytics/summary
+3) Bulk Upsert → POST /api/jobs/{job_id}/uploads/bulk_upsert to write/update upload records
+4) KPIs → GET /api/jobs/{job_id}/kpis?mode=last30
+5) Recent Uploads → GET /api/jobs/{job_id}/uploads/recent?limit=20
+6) CSV Download → GET /api/jobs/{job_id}/analytics/download/{kind}
+
+============================================================
+Endpoint Catalog
+============================================================
+
+1) Login (example: for endpoints that need a session)
+------------------------------------------------------------
+POST /api/auth/login
+Purpose: obtain a session cookie for endpoints that require login (e.g., contracts/*/sentences/import)
+
+curl -X POST http://127.0.0.1:5000/api/auth/login   -H "Content-Type: application/json"   -d "{"email":"test@example.com","password":"yourpassword"}" -i
+
+
+2) Auto-register a Job’s output directory (strongly recommended)
+------------------------------------------------------------
+POST /api/jobs/auto_register/{user_id}/{contract_id}
+
+Purpose: automatically locate backend/outputs/{user_id}/{contract_id} by convention; if sentences.csv
+is not present in that root directory, it falls back to any subdirectory that contains sentences.csv.
+
+Auth: none
+
+Path parameters:
+- user_id (int)
+- contract_id (int)
+
+Query parameters:
+- job_id (optional, string; defaults to user{user_id}-contract{contract_id})
+
+Success response:
+{ "job_id":"...", "registered_outputs":"" }
+
+Error responses:
+- 404: output directory not found or sentences.csv missing
+
+Examples:
+
+# use default job_id
+curl -X POST "http://127.0.0.1:5000/api/jobs/auto_register/8/35"
+
+# specify a custom job_id
+curl -X POST "http://127.0.0.1:5000/api/jobs/auto_register/8/35?job_id=my-job-001"
+
+
+Verify the pointer file:
+type backend\legal_analytics_api\storage\jobs\user8-contract35\pointer.txt
+
+
+3) Manually register a Job’s output directory
+------------------------------------------------------------
+POST /api/jobs/{job_id}/register
+
+Purpose: register outputs_dir (containing sentences.csv) to the pointer file of the given job_id.
+
+Auth: none
+
+Path parameter:
+- job_id (string)
+
+Request body:
+- outputs_dir (string; absolute path of a directory that contains sentences.csv)
+
+Success response:
+{ "job_id": "...", "registered_outputs": "<absolute-path>" }
+
+Error responses:
+- 400: directory not found or sentences.csv missing
+
+Example:
+curl -X POST "http://127.0.0.1:5000/api/jobs/job-123/register"   -H "Content-Type: application/json"   -d "{"outputs_dir":"D:/.../outputs/8/35"}"
+
+
+4) Import contract sentences (business-layer example)
+------------------------------------------------------------
+POST /api/contracts/{contract_id}/sentences/import
+
+Purpose: import backend/outputs/<user_id>/<contract_id>/sentences.csv into the contract_sentences table,
+and create an analysis_jobs record (status COMPLETED).
+
+Auth: requires a session cookie (login first).
+
+Path parameter:
+- contract_id (int)
+
+Success response:
+{ contract_id, job_id, imported_count, csv_path }
+
+Error responses:
+- 404: contract not found / output directory or CSV missing
+- 400: CSV is empty
+
+
+5) Analytics Summary (Dashboard chart data)
+------------------------------------------------------------
+GET /api/jobs/{job_id}/analytics/summary
+
+Purpose: return aggregates for distributions/trends/box plots required by the dashboard.
+
+Data source: sentences.csv located via the pointer; computed by datasets.py.
+
+Auth: none
+
+Path parameter:
+- job_id (string)
+
+Query parameters:
+- bins_pages (int, default 10)
+- bins_sentence (int, default 20)
+- topk (int, default 20)
+
+Success response (fields):
+- metadata (number of contracts, total sentences, number of files)
+- page_length_hist, sentence_length_hist, avg_sentence_length_hist
+- contracts_scatter
+- section_frequency, subsection_frequency
+- sentence_length_box
+
+Error responses:
+- 404: job not registered or sentences.csv missing
+- 400: required columns missing in CSV
+
+Example:
+curl "http://127.0.0.1:5000/api/jobs/user8-contract35/analytics/summary?bins_pages=12&bins_sentence=30&topk=25"
+
+
+6) Download analytics data (CSV)
+------------------------------------------------------------
+GET /api/jobs/{job_id}/analytics/download/{kind}
+
+Purpose: download the requested analytics CSV as an attachment.
+
+Auth: none
+
+Path parameters:
+- job_id (string)
+- kind ∈ pages_vs_contracts | sentence_length_hist | avg_sentence_length_hist | section_counts | subsection_counts | contracts_scatter
+
+Error responses:
+- 404: job not registered or sentences.csv missing
+- 400: invalid kind
+
+
+7) Bulk write/update upload records (drives KPIs & Recent Uploads)
+------------------------------------------------------------
+POST /api/jobs/{job_id}/uploads/bulk_upsert
+
+Purpose: bulk upsert upload/execution records (persisted to uploads.jsonl).
+
+Auth: none
+
+Path parameter:
+- job_id (string)
+
+Request body:
+- uploads (array) where each item contains:
+  - filename (string)
+  - type (string, e.g., PDF/DOCX)
+  - uploaded_at (ISO8601 UTC, e.g., 2025-10-12T09:15:00Z) ← with filename forms a unique key
+  - status ∈ QUEUED | PROCESSING | COMPLETED | FAILED
+  - Optional: started_at, finished_at (ISO8601 UTC), progress_pct (0–100),
+              ambiguous_count, total_sentences, avg_explanation_clarity (0–10),
+              duration_seconds, analysis_summary, actions (object)
+
+Success response:
+{ "job_id": "...", "upserted": <int> }
+
+Example (curl):
+curl -X POST "http://127.0.0.1:5000/api/jobs/user8-contract36/uploads/bulk_upsert"   -H "Content-Type: application/json"   -d '{
+    "uploads": [{
+      "filename": "NDA-123.pdf",
+      "type": "PDF",
+      "uploaded_at": "2025-10-15T06:40:00Z",
+      "status": "COMPLETED",
+      "started_at": "2025-10-15T06:40:00Z",
+      "finished_at": "2025-10-15T06:41:36Z",
+      "progress_pct": 100,
+      "ambiguous_count": 14,
+      "total_sentences": 238,
+      "avg_explanation_clarity": 8.7,
+      "duration_seconds": 96,
+      "analysis_summary": "Ambiguity found in Sections 2, 3.1",
+      "actions": { "view": "/contracts/NDA-123", "download_report": "/api/reports/NDA-123.csv" }
+    }]
+  }'
+
+
+Usage Tips
+- Idempotency: within one processing round, always reuse the same uploaded_at; intermediate PROGRESS
+  updates will overwrite the existing record for that (filename, uploaded_at).
+- Time: use UTC + Z for all timestamps; localize on the frontend for display.
+
+
+8) KPIs (top cards)
+------------------------------------------------------------
+GET /api/jobs/{job_id}/kpis
+
+Purpose: aggregate KPIs over a time window and return comparisons with the previous window.
+
+Auth: none
+
+Path parameter:
+- job_id (string)
+
+Query parameters:
+- mode ∈ last30 (default) | this_month | custom
+- since, until: required only if mode=custom (ISO8601)
+
+Per-metric return shape:
+{ value, prev, delta_pct, delta_diff }
+
+Definitions
+- total_contracts_processed: number of records with status=COMPLETED in the period
+- sentences_classified: sum of total_sentences in the period
+- ambiguous_sentences_count: sum of ambiguous_count in the period
+- avg_explanation_clarity: mean of avg_explanation_clarity for completed records
+- avg_analysis_time_minutes: mean duration for completed records (prefer duration_seconds,
+  otherwise finished_at - started_at)
+- delta_pct = ((value - prev) / prev) * 100; when prev = 0, delta_pct = null
+
+Example:
+curl "http://127.0.0.1:5000/api/jobs/user8-contract36/kpis?mode=last30"
+
+
+9) Recent Uploads (table)
+------------------------------------------------------------
+GET /api/jobs/{job_id}/uploads/recent
+
+Purpose: return the latest upload/execution records, ordered by uploaded_at descending.
+
+Auth: none
+
+Path parameter:
+- job_id (string)
+
+Query parameter:
+- limit (int; default 20, min 1, max 200)
+
+Response structure (example):
+{
+  "rows": [{
+    "filename": "NDA-123.pdf",
+    "type": "PDF",
+    "uploaded_at": "2025-10-15T06:40:00Z",
+    "status": "COMPLETED",
+    "analysis_summary": "Ambiguity found in Sections 2, 3.1",
+    "progress_pct": 100,
+    "ambiguous_count": 14,
+    "total_sentences": 238,
+    "avg_explanation_clarity": 8.7,
+    "duration_seconds": 96,
+    "actions": { "view": "/contracts/NDA-123", "download_report": "/api/reports/NDA-123.csv" }
+  }]
+}
+
+
+============================================================
+Dates & Time Zones
+============================================================
+- Use ISO-8601 with trailing Z (UTC), e.g., 2025-10-12T09:15:00Z
+- Parsers accept Z or explicit offsets; invalid values will be ignored
+- The frontend should format times in the user’s time zone (e.g., Australia/Sydney)

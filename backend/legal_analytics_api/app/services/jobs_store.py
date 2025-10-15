@@ -13,14 +13,63 @@ def _job_dir(job_id: str) -> Path:
     d.mkdir(parents=True, exist_ok=True)
     return d
 
-def parse_dt(s: str) -> datetime:
-    # Accept 'Z' suffix or offset-aware; fallback
+def parse_dt(s: Optional[str]) -> Optional[datetime]:
+    """Parse a datetime string robustly and return a tz-aware datetime.
+
+    - Returns None for empty/None/obviously invalid inputs.
+    - Accepts ISO-8601 with 'Z' or offsets, with/without fractional seconds.
+    - For naive results, attaches DEFAULT_TZ.
+    """
+    if s is None:
+        return None
+    if not isinstance(s, str):
+        return None
+    s = s.strip()
+    if not s:
+        return None
+    # Common placeholder/invalid tokens seen in bad data
+    if s.lower() in {"string", "null", "none", "na", "n/a", "nan"}:
+        return None
+
+    # ISO-8601 with 'Z' suffix
     if s.endswith("Z"):
-        return datetime.fromisoformat(s.replace("Z","+00:00"))
+        try:
+            dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=DEFAULT_TZ)
+            return dt
+        except Exception:
+            pass
+
+    # Generic ISO-8601 parse
     try:
-        return datetime.fromisoformat(s)
+        dt = datetime.fromisoformat(s)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=DEFAULT_TZ)
+        return dt
     except Exception:
-        return datetime.strptime(s, "%Y-%m-%dT%H:%M:%S")
+        pass
+
+    # Fallback formats
+    fmts = [
+        "%Y-%m-%dT%H:%M:%S.%f%z",
+        "%Y-%m-%dT%H:%M:%S%z",
+        "%Y-%m-%d %H:%M:%S%z",
+        "%Y-%m-%dT%H:%M:%S.%f",
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%d",
+    ]
+    for fmt in fmts:
+        try:
+            dt = datetime.strptime(s, fmt)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=DEFAULT_TZ)
+            return dt
+        except Exception:
+            continue
+
+    # Unable to parse
+    return None
 
 def _uploads_path(job_id: str) -> Path:
     return _job_dir(job_id) / "uploads.jsonl"
