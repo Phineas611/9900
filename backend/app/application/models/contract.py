@@ -9,10 +9,12 @@ class ProcessingStatus(str, Enum):
     COMPLETED = "completed"
     FAILED = "failed"
 
+# 合同创建请求
 class ContractCreateRequest(BaseModel):
     title: str = Field(min_length=1, max_length=255)
     description: Optional[str] = Field(None, max_length=1000)
 
+# 合同响应模型
 class ContractResponse(BaseModel):
     id: int
     title: str
@@ -31,6 +33,7 @@ class ContractResponse(BaseModel):
         from_attributes = True
 
 
+# 文件上传响应
 class FileUploadResponse(BaseModel):
     contract_id: int
     file_name: str
