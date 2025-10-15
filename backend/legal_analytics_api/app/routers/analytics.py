@@ -30,6 +30,39 @@ def register_outputs(job_id: str, body: RegisterBody):
     (job_dir / "pointer.txt").write_text(str(out_dir), encoding="utf-8")
     return {"job_id": job_id, "registered_outputs": str(out_dir)}
 
+class AutoRegisterResponse(BaseModel):
+    job_id: str
+    registered_outputs: str
+
+@router.post("/jobs/auto_register/{user_id}/{contract_id}", response_model=AutoRegisterResponse)
+def auto_register_outputs(user_id: int, contract_id: int, job_id: Optional[str] = None):
+    """
+    Auto-register a job by convention:
+    outputs_dir = backend/outputs/{user_id}/{contract_id}
+    If root-level sentences.csv is missing, fallback to any subfolder containing sentences.csv.
+    """
+    backend_dir = Path(__file__).resolve().parents[3]  # .../backend
+    base_dir = backend_dir / "outputs" / str(user_id) / str(contract_id)
+    if not base_dir.exists():
+        raise HTTPException(404, f"outputs_dir not found: {base_dir}")
+
+    out_dir = base_dir
+    csv = out_dir / "sentences.csv"
+    if not csv.exists():
+        # fallback: find any sentences.csv under this contract's outputs
+        try:
+            match = next(out_dir.rglob("sentences.csv"))
+            out_dir = match.parent
+            csv = match
+        except StopIteration:
+            raise HTTPException(404, f"sentences.csv not found under: {out_dir}")
+
+    job_id_final = job_id or f"user{user_id}-contract{contract_id}"
+    job_dir = DATA_ROOT / job_id_final
+    job_dir.mkdir(parents=True, exist_ok=True)
+    (job_dir / "pointer.txt").write_text(str(out_dir.resolve()), encoding="utf-8")
+    return {"job_id": job_id_final, "registered_outputs": str(out_dir.resolve())}
+
 def _resolve_csv(job_id: str) -> Path:
     job_dir = DATA_ROOT / job_id
     pointer = job_dir / "pointer.txt"

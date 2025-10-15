@@ -8,6 +8,8 @@ def _in_range(ts: Optional[str], start: datetime, end: datetime) -> bool:
     if not ts:
         return False
     t = parse_dt(ts)
+    if t is None:
+        return False
     return (t >= start) and (t <= end)
 
 def _avg(arr: list[float]) -> Optional[float]:
@@ -56,7 +58,11 @@ def compute_kpis_period(uploads: List[Dict[str, Any]], start: datetime, end: dat
             if u.get("duration_seconds") is not None:
                 samples.append(float(u["duration_seconds"]) / 60.0)
             elif u.get("finished_at") and u.get("started_at"):
-                dt = parse_dt(u["finished_at"]) - parse_dt(u["started_at"])
+                tf = parse_dt(u["finished_at"]) 
+                ts = parse_dt(u["started_at"]) 
+                if tf is None or ts is None:
+                    continue
+                dt = tf - ts
                 samples.append(max(0.0, dt.total_seconds()/60.0))
         return _avg(samples)
 

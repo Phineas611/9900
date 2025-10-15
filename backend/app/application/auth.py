@@ -8,6 +8,9 @@ def get_current_user(
     session: str | None = Cookie(default=None, alias="session"),
     db: Session = Depends(get_db),
 ):
+    """
+    从 Cookie 中提取 session token 并验证，返回当前用户对象
+    """
     if not session:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated"
