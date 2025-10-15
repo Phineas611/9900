@@ -4,6 +4,13 @@ from app.database.setup import get_db
 from sqlalchemy import text
 from typing import List, Optional
 from datetime import datetime, timedelta, timezone
+from app.application.auth import get_current_user  
+from pathlib import Path
+import pandas as pd
+from uuid import uuid4
+from app.database.models.analysis_job import AnalysisJob
+from app.database.models.contract_sentence import ContractSentence
+from app.persistence.contract_repository import get_contract_by_id
 
 router = APIRouter()
 
@@ -219,5 +226,106 @@ def get_recent_activity(limit: int = 20, db: Session = Depends(get_db)):
 
         activities = [dict(row._mapping) for row in result]
         return activities
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/contracts/{contract_id}/sentences/import")
+def import_contract_sentences(
+    contract_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    try:
+
+        contract = get_contract_by_id(db, contract_id, current_user.id)
+        if not contract:
+            raise HTTPException(status_code=404, detail="Contract not found")
+
+
+        backend_dir = Path(__file__).resolve().parents[3]
+        output_root = backend_dir / "outputs" / str(current_user.id) / str(contract_id)
+
+        if not output_root.exists():
+            raise HTTPException(status_code=404, detail="Output directory not found")
+
+
+        csv_path = None
+        root_outputs_dir = output_root
+        root_csv = root_outputs_dir / "sentences.csv"  
+        if root_csv.exists():
+            csv_path = root_csv
+        else:
+
+            for p in output_root.iterdir():
+                if p.is_dir():
+                    candidate = p / "sentences.csv"
+                    if candidate.exists():
+                        csv_path = candidate
+                        break
+
+        if not csv_path:
+            raise HTTPException(status_code=404, detail="Sentences CSV not found in outputs")
+
+    
+        df = pd.read_csv(csv_path, encoding="utf-8")
+        if df.empty:
+            raise HTTPException(status_code=400, detail="CSV is empty")
+
+
+        job_id = str(uuid4())
+        job = AnalysisJob(
+            id=job_id,
+            user_id=current_user.id,
+            contract_id=contract_id,
+            file_name=contract.file_name,
+            file_type=contract.file_type,
+            file_size=contract.file_size,
+            status="COMPLETED",
+            uploaded_at=datetime.now(timezone.utc),
+            started_at=datetime.now(timezone.utc),
+            finished_at=datetime.now(timezone.utc),
+            progress_pct=100.0,
+            total_sentences=int(len(df)),
+            ambiguous_count=0,
+            avg_explanation_clarity=None,
+            duration_seconds=0.0,
+            analysis_summary=None,
+            actions=None
+        )
+        db.add(job)
+        db.commit()
+
+
+        objs = []
+        for _, row in df.iterrows():
+            objs.append(ContractSentence(
+                job_id=job_id,
+                contract_id=contract_id,
+                file_name=str(row.get("file_name") or contract.file_name or ""),
+                file_type=str(row.get("file_type") or contract.file_type or ""),
+                page=int(row.get("page")) if not pd.isna(row.get("page")) else None,
+                sentence_id=int(row.get("sentence_id")) if not pd.isna(row.get("sentence_id")) else None,
+                section=None,
+                subsection=None,
+                sentence=str(row.get("sentence") or ""),
+                sentence_vec=None,
+                label=None,
+                is_ambiguous=None,
+                explanation=None,
+                suggested_revision=None,
+                clarity_score=None
+            ))
+        db.bulk_save_objects(objs)
+        db.commit()
+
+        return {
+            "contract_id": contract_id,
+            "job_id": job_id,
+            "imported_count": len(objs),
+            "csv_path": str(csv_path)
+        }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

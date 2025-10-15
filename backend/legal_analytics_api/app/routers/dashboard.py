@@ -46,6 +46,8 @@ def _date_range(mode: Literal["last30","this_month","custom"], since: Optional[s
             raise HTTPException(400, "custom mode requires since & until (ISO)")
         start = parse_dt(since)
         end = parse_dt(until)
+        if start is None or end is None:
+            raise HTTPException(400, "Invalid since/until; expected ISO-8601 datetime")
     return start, end
 
 @router.get("/jobs/{job_id}/kpis", response_model=KPIsResponse)
@@ -77,7 +79,10 @@ class RecentUploadsResponse(BaseModel):
 def recent_uploads(job_id: str, limit: int = Query(20, ge=1, le=200)):
     uploads = load_uploads_for_job(job_id)
     # Sort by uploaded_at desc
-    uploads = sorted(uploads, key=lambda u: parse_dt(u.get("uploaded_at") or u.get("started_at") or "1970-01-01T00:00:00Z"), reverse=True)[:limit]
+    def _sort_key(u: Dict[str, Any]):
+        dt = parse_dt(u.get("uploaded_at") or u.get("started_at"))
+        return dt or datetime(1970, 1, 1, tzinfo=DEFAULT_TZ)
+    uploads = sorted(uploads, key=_sort_key, reverse=True)[:limit]
     rows: List[Dict[str, Any]] = []
     for u in uploads:
         row = {
@@ -99,7 +104,11 @@ def recent_uploads(job_id: str, limit: int = Query(20, ge=1, le=200)):
 def _calc_duration(u: Dict[str, Any]) -> Optional[float]:
     try:
         if u.get("finished_at") and u.get("started_at"):
-            dt = parse_dt(u["finished_at"]) - parse_dt(u["started_at"])
+            tf = parse_dt(u["finished_at"])
+            ts = parse_dt(u["started_at"])
+            if tf is None or ts is None:
+                return None
+            dt = tf - ts
             return max(0.0, dt.total_seconds())
     except Exception:
         return None

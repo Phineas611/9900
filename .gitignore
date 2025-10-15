@@ -19,3 +19,12 @@ build/
 # App outputs/temp
 outputs/
 tmp/
+backend/.venv/
+backend/**/__pycache__/
+backend/**/.env
+backend/outputs/
+backend/legal_analytics_api/storage/jobs/
+backend/legal_analytics_api/outputs/
+backend/**/uploads.jsonl
+backend/**/pointer.txt
+backend/storage/pgdata/
