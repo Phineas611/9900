@@ -140,7 +140,7 @@ const DashboardMain = () => {
   // Load all data
   const loadDashboardData = async () => {
     try {
-      setLoading(true);
+      // setLoading(true);
       setError(null);
 
       const [statsData, uploadsData, activitiesData] = await Promise.all([
@@ -150,8 +150,6 @@ const DashboardMain = () => {
       ]);
 
       setStats(statsData);
-      setUploads(uploadsData.items);
-      setTotalItems(uploadsData.total);
       setActivities(activitiesData);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load dashboard data');
@@ -167,14 +165,24 @@ const DashboardMain = () => {
   };
 
   // Handle pagination changes
-  const handlePageChange = (page: number) => {
-    setCurrentPage(page);
+  const handlePageChange = async (page: number) => {
+    try {
+      const uploadsData = await fetchUploads(page, itemsPerPage);
+      setUploads(uploadsData.items);
+      setTotalItems(uploadsData.total);
+      setCurrentPage(page);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load page data');
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Reload data during initial loading and paging changes
   useEffect(() => {
     loadDashboardData();
-  }, [currentPage]);
+    handlePageChange(1);
+  }, []);
 
   // Rendering loading status
   if (loading) {

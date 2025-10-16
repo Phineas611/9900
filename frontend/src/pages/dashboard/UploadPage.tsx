@@ -151,7 +151,7 @@ const UploadPage = () => {
     <div className="upload-page">
       <div className="upload-container">
         {/* Page Header */}
-        <div className="page-header">
+        <div className="upload-page-header">
           <h1>Upload Contract</h1>
           <p>Upload legal documents for ambiguity analysis and plain-English explanations</p>
         </div>

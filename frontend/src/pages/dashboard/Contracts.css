@@ -1,0 +1,67 @@
+.contracts-page {
+  padding: 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+  text-align: left; 
+}
+
+/* Page Header */
+.page-header {
+  margin-bottom: 32px;
+}
+
+.page-header h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #1a202c;
+  margin: 0 0 8px 0;
+}
+
+.page-header p {
+  color: #718096;
+  font-size: 1rem;
+  margin: 0;
+}
+
+/* Tab Navigation */
+.tabs-container {
+  background: #eee;
+  border-radius: 30px;
+  padding: 3px;
+  margin-bottom: 24px;
+  display: inline-flex;
+  width: auto;
+}
+
+.tabs {
+  display: flex;
+  gap: 4px;
+}
+
+.tab-button {
+  padding: 6px 12px;
+  border: none;
+  background: transparent;
+  color: #718096;
+  font-weight: 500;
+  border-radius: 30px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 0.9rem;
+}
+
+.tab-button:hover {
+  color: #4a5568;
+  background: #edf2f7;
+}
+
+.tab-button.active {
+  background: white;
+  color: #3182ce;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Tab Content */
+.tab-content {
+  min-height: 600px;
+}
