@@ -13,19 +13,20 @@
 }
 
 /* Page Header */
-.page-header {
+.upload-page-header {
     padding: 32px 32px 24px;
     border-bottom: 1px solid #e9ecef;
+    text-align: left;
 }
 
-.page-header h1 {
+.upload-page-header h1 {
     font-size: 2rem;
     font-weight: 700;
     color: #1a202c;
     margin: 0 0 8px 0;
 }
 
-.page-header p {
+.upload-page-header p {
     color: #718096;
     font-size: 1rem;
     margin: 0;
@@ -328,7 +329,7 @@
         padding: 16px;
     }
 
-    .page-header,
+    .upload-page-header,
     .upload-section {
         padding: 24px;
     }
