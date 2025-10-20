@@ -12,14 +12,17 @@ PREFER_CONTINUITY = True
 # Abbreviations after which a trailing period should NOT be treated as a sentence boundary.
 _ABBR_TOKENS = {
     "Mr", "Mrs", "Ms", "Dr", "Prof", "Sr", "Jr", "St", "No", "Art", "Sec", "Secs",
-    "Ch", "Fig", "Eq", "Ltd", "Inc", "Co", "Corp", "U.S", "e.g", "i.e", "vs",
+    "Ch", "Fig", "Eq", "Ltd", "Inc", "Co", "Corp", "U.S", "U.S.C", "C.F.R", "e.g", "i.e", "vs",
     "Jan", "Feb", "Mar", "Apr", "Jun", "Jul", "Aug", "Sep", "Sept", "Oct", "Nov", "Dec",
     # Common company-style abbreviations
     "N.A", "S.A", "N.V", "B.V", "A.G", "L.P", "L.L.P", "LLP", "L.L.C", "LLC", "P.L.C", "PLC"
 }
 
-# Primary boundary: sentence-final punctuation + whitespace + likely new sentence start (optional bracket + capital/digit).
-_SENT_BOUNDARY = re.compile(r'([.!?。；])\s+(?=[\(\[]?[A-Z0-9])')
+# Primary boundary: sentence-final punctuation (+ optional closing quote/bracket) + whitespace
+# + likely new sentence start (optional opening bracket + capital/digit).
+_SENT_BOUNDARY = re.compile(
+    r'([.!?。；]["”’\'\)\]]?)\s+(?=[\(\[]?[A-Z0-9])'
+)
 
 # Helper to capture the token immediately before punctuation (used for abbreviation protection).
 _PRE_TOKEN = re.compile(r'([A-Za-z\.]+)$')
@@ -34,9 +37,18 @@ _PAGE_NUM_LINE = re.compile(r'^\s*\d+\s*$')
 _RE_RKW       = re.compile(r'(?i)\brestricted\s+key\s*word[s]?\b')
 _RE_RKW_BRAND = re.compile(r'(?i)\b([A-Z][A-Za-z]+)\s+Restricted\s+Key\s*Words\b')
 
-# Bullet / enumerator detection
+# Line-start bullet / enumerator detection (for paragraph-level items).
 _BULLET_LINE = re.compile(
-    r'^\s*(?:[\-\–\—•▪·]|\([a-zA-Z0-9]+\)|[a-zA-Z0-9]+\.)\s+'
+    r'^\s*(?:[\-\–\—•▪·]|\([a-zA-Z0-9ivxIVX]+\)|[a-zA-Z0-9ivxIVX]+[.)])\s+'
+)
+
+# NEW: inline enumeration anchors (for a., b., c., 1., (i), (a), iii., etc.) anywhere in a block
+# but only when they appear after whitespace or at the start (to avoid "U.S." false hits).
+_INLINE_ENUM_ANCHOR = re.compile(
+    r'(?:(?<=^)|(?<=\s))'                              # start of block OR preceded by whitespace
+    r'(?:\(\s*([A-Za-z0-9ivxlcdmIVXLCDM]+)\s*\)'       # (a) / (i) / (1)
+    r'|([A-Za-z0-9ivxlcdmIVXLCDM]+)[\.\)])'            # a. / a) / 1. / iii. / III)
+    r'\s+(?=\S)',                                      # followed by some content
 )
 
 # ====== Utilities ======
@@ -61,24 +73,33 @@ def _is_bulletish(line: str) -> bool:
 def _should_block_split(prefix: str) -> bool:
     """
     Return True if we should NOT split at the found punctuation because it is
-    part of an abbreviation, URL/domain, or legal reference token.
+    part of an abbreviation, numeric chain, URL/email/domain, or legal reference token.
     """
-    # Abbreviation protection
+    # Abbreviation protection (e.g., "U.S.", "Inc.", "e.g.")
     m = _PRE_TOKEN.search(prefix)
     if m and m.group(1) in _ABBR_TOKENS:
         return True
 
-    # Domain/URL before the dot (e.g., example.com)
+    # Email addresses (name@example.com).
+    if re.search(r'\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b$', prefix):
+        return True
+
+    # Domain/URL before the dot (e.g., example.com, https://...).
     if re.search(r'(?:https?://|www\.)', prefix, flags=re.IGNORECASE):
         return True
     if re.search(r'\b[A-Za-z0-9\-]+(?:\.[A-Za-z0-9\-]+)*\.(?:com|net|org|gov|edu|io|co|uk|au)\b$', prefix, flags=re.IGNORECASE):
+        return True
+
+    # Numeric chains: decimals, versioning, dates like 10.12.2020 or 3.14, 1.2.3
+    if re.search(r'(?:\b\d+(?:\.\d+){1,3}\b|\b\d+\.\d+\b)$', prefix):
         return True
 
     # Legal references like "Section 3.1" or "Sec. 2.4"
     if re.search(r'(?:Section|Sec|Art|Article|Exhibit|Schedule)\s+\d+(?:\.\d+)*$', prefix, flags=re.IGNORECASE):
         return True
 
-    # Initials-like tokens "A." "B." "C." preceding a clause are common; avoid splitting right after them
+    # Initial-like tokens "A." "B." "C." that are NOT list anchors (handled elsewhere)
+    # Keep this conservative; inline list splitting comes first and removes true list anchors.
     if re.search(r'\b[A-Za-z]\.$', prefix):
         return True
 
@@ -200,35 +221,80 @@ def _pre_segment_blocks(raw: str) -> List[str]:
 
     return [x for x in stitched if x]
 
+# ====== Inline enumeration splitter (NEW) ======
+def _split_by_inline_enumerations(block: str) -> List[str]:
+    """
+    Split a block at inline enumeration anchors like: a.  b.  c.   or   (i) (ii) (iii)  or  1) 2) 3)
+    The anchor must be at start-of-block OR preceded by whitespace to avoid matching 'U.S.' or 'A.G.'.
+    We also skip anchors that are actually known abbreviations (e.g., 'No.').
+    Heuristic: trigger if there are >=2 anchors, OR a single anchor at the very beginning.
+    """
+    matches = list(_INLINE_ENUM_ANCHOR.finditer(block))
+    if not matches:
+        return [block]
+
+    # Filter out anchors that are actually abbreviations ('No.', 'Art.', etc.)
+    filtered = []
+    for m in matches:
+        token = m.group(1) or m.group(2) or ""
+        token_clean = re.sub(r'[^A-Za-z0-9]+', '', token)
+        if token_clean and token_clean in _ABBR_TOKENS:
+            continue
+        filtered.append(m)
+
+    if not filtered:
+        return [block]
+
+    if len(filtered) < 2 and filtered[0].start() != 0:
+        # Only one candidate and not at the start: don't split to avoid false positives.
+        return [block]
+
+    # Perform the split: keep the anchor with its segment.
+    parts: List[str] = []
+    starts = [m.start() for m in filtered] + [len(block)]
+    for i in range(len(filtered)):
+        seg = block[starts[i]:starts[i+1]].strip()
+        if seg:
+            parts.append(seg)
+    # Also include any leading text before the first anchor as its own segment (rare).
+    lead = block[:filtered[0].start()].strip()
+    if lead:
+        parts.insert(0, lead)
+    return parts
+
 # ====== Intra-block sentence splitting ======
 def _split_sentences_in_block(block: str) -> List[str]:
     """
     Split a single block into sentences:
     - Keep headings/anchors as standalone sentences.
-    - Split at sentence boundaries with abbreviation/URL/legal-reference protection.
-    - Conservative: no secondary splitting on semicolons or mid-sentence bullets.
+    - Split at sentence boundaries with abbreviation/URL/email/legal-reference/numeric protection.
+    - NEW: First split by inline enumerations (a., b., c., (i), 1., etc.) so list items on the same line are separated.
     """
     # Headings/anchors remain intact.
     if _is_all_caps_heading(block) or _HEAD_TOKENS.match(block) or block.startswith("ARTICLE "):
         return [block.strip()]
 
-    parts: List[str] = []
-    last_idx = 0
-    for m in _SENT_BOUNDARY.finditer(block):
-        punct_start = m.start(1)
-        if _should_block_split(block[last_idx:punct_start]):
-            continue
-        cut = m.end(1)
-        left = block[last_idx:cut].strip()
-        if left:
-            parts.append(left)
-        last_idx = m.end()
+    # First, separate inline enumeration items (if any).
+    subblocks = _split_by_inline_enumerations(block)
 
-    tail = block[last_idx:].strip()
-    if tail:
-        parts.append(tail)
+    sentences: List[str] = []
+    for sub in subblocks:
+        last_idx = 0
+        for m in _SENT_BOUNDARY.finditer(sub):
+            punct_start = m.start(1)
+            if _should_block_split(sub[last_idx:punct_start]):
+                continue
+            cut = m.end(1)  # include the ender (and possible closing quote/bracket)
+            left = sub[last_idx:cut].strip()
+            if left:
+                sentences.append(left)
+            last_idx = m.end()
 
-    final: List[str] = [normalize_whitespace(x) for x in parts if normalize_whitespace(x)]
+        tail = sub[last_idx:].strip()
+        if tail:
+            sentences.append(tail)
+
+    final: List[str] = [normalize_whitespace(x) for x in sentences if normalize_whitespace(x)]
     return final
 
 def split_into_sentences(text: str) -> List[str]:
