@@ -8,6 +8,7 @@ import Reports from './dashboard/Reports';
 import Settings from './dashboard/Settings';
 import './DashboardPage.css';
 import UploadPage from './dashboard/UploadPage';
+import SentenceAnalysis from './dashboard/SentenceAnalysis'
 
 // Definition of menu item types
 interface MenuItem {
@@ -156,6 +157,8 @@ const DashboardPage = () => {
           <Route path="/settings/general" element={<GeneralSettings />} />
           <Route path="/settings/other" element={<OtherSettings />} />
           */}
+
+          <Route path="/sentence_analysis" element={<SentenceAnalysis />} />
 
           <Route path="/upload" element={<UploadPage />} />
         </Routes>

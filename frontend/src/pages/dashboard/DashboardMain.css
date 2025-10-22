@@ -220,20 +220,21 @@
 }
 
 .actions {
-  display: flex;
-  gap: 8px;
+  white-space: nowrap;
+  text-align: center;
+  width: 100px;
 }
 
-.action-btn {
+.action-btn-dashboard-main {
   background: none;
   border: none;
   cursor: pointer;
-  padding: 4px;
-  border-radius: 4px;
+  padding: 8px;
+  border-radius: 6px;
   transition: background-color 0.2s;
 }
 
-.action-btn:hover {
+.action-btn-dashboard-main:hover {
   background-color: #edf2f7;
 }
 
