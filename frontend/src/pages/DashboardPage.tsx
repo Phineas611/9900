@@ -5,8 +5,7 @@ import Contracts from './dashboard/Contracts';
 import ModelComparison from './dashboard/ModelComparison';
 import ManualScoring from './dashboard/ManualScoring';
 import Reports from './dashboard/Reports';
-import GeneralSettings from './dashboard/GeneralSettings';
-import OtherSettings from './dashboard/OtherSettings';
+import Settings from './dashboard/Settings';
 import './DashboardPage.css';
 import UploadPage from './dashboard/UploadPage';
 
@@ -74,6 +73,7 @@ const DashboardPage = () => {
       label: 'Settings',
       icon: '⚙️',
       path: '/settings',
+      /*
       children: [
         {
           key: 'general settings',
@@ -88,6 +88,7 @@ const DashboardPage = () => {
           path: '/settings/other'
         }
       ]
+      */
     }
   ];
 
@@ -149,9 +150,12 @@ const DashboardPage = () => {
           <Route path="/model_comparison" element={<ModelComparison />} />
           <Route path="/manual_scoring" element={<ManualScoring />} />
           <Route path="/reports" element={<Reports />} />
+          <Route path="/settings" element={<Settings />} />
+          {/*
           <Route path="/settings" element={<Navigate to="/settings/general" replace />} />
           <Route path="/settings/general" element={<GeneralSettings />} />
           <Route path="/settings/other" element={<OtherSettings />} />
+          */}
 
           <Route path="/upload" element={<UploadPage />} />
         </Routes>
