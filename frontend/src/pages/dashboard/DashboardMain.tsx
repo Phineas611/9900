@@ -211,6 +211,10 @@ const DashboardMain = () => {
   // Calculate pagination
   const totalPages = Math.ceil(totalItems / itemsPerPage);
 
+  const handleSentenceAnalysisClick = (id: string) => {
+    navigate(`/sentence_analysis?id=${id}`);
+  };
+
   return (
     <div className="dashboard-main">
       {/* Page Title */}
@@ -304,14 +308,27 @@ const DashboardMain = () => {
                     {upload.analysis || ''}
                   </td>
                   <td className="actions">
-                    <button className="action-btn" title="View analysis">
-                      
+                    <button className="action-btn-dashboard-main" title="View analysis" onClick={() => handleSentenceAnalysisClick(upload.id)}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                        <circle cx="12" cy="12" r="3"></circle>
+                      </svg>
                     </button>
-                    <button className="action-btn" title="Download report">
-                      
+                    <button className="action-btn-dashboard-main" title="Download report">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                      </svg>
                     </button>
-                    <button className="action-btn" title="Share">
-                      
+                    <button className="action-btn-dashboard-main" title="Share">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <circle cx="18" cy="5" r="3"></circle>
+                        <circle cx="6" cy="12" r="3"></circle>
+                        <circle cx="18" cy="19" r="3"></circle>
+                        <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+                        <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+                      </svg>
                     </button>
                   </td>
                 </tr>
