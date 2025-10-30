@@ -38,6 +38,7 @@ const DashboardPage = () => {
       icon: '📃',
       path: '/contracts'
     },
+    /*
     {
       key: 'extract',
       label: 'Extract & Classify',
@@ -51,6 +52,7 @@ const DashboardPage = () => {
       icon: '💬',
       path: '/explain'
     },
+    */
     {
       key: 'model comparison',
       label: 'Model Comparison',
