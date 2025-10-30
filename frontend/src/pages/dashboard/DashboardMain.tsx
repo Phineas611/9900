@@ -102,7 +102,7 @@ const DashboardMain = () => {
     }
     const rows = await response.json();
     const mapped: UploadItem[] = (rows || []).map((row: any) => ({
-      id: String(row.job_id ?? row.id ?? Math.random()),
+      id: String(row.contract_id ?? row.job_id ?? row.id ?? Math.random()),
       fileName: row.file_name ?? 'Unknown',
       fileType: row.file_type ?? 'Unknown',
       uploadedAt: row.uploaded_at ?? '',
@@ -314,7 +314,7 @@ const DashboardMain = () => {
                         <circle cx="12" cy="12" r="3"></circle>
                       </svg>
                     </button>
-                    <button className="action-btn-dashboard-main" title="Download report">
+                    <button className="action-btn-dashboard-main" title="Download report" onClick={() => window.location.href = `/${upload.fileName}`}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                         <polyline points="7 10 12 15 17 10"></polyline>
