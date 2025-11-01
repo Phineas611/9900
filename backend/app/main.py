@@ -3,11 +3,21 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 import uvicorn
+import logging
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+# Load environment variables from backend/.env explicitly
+load_dotenv(dotenv_path=Path(__file__).resolve().parents[1] / ".env")
 
 from app.presentation.routes.healthcheck import router as health_router
 from app.presentation.routes.auth import router as auth_router  
 from app.presentation.routes.upload import router as upload_router
 from app.presentation.routes.analytics import router as analytics_router
+from app.presentation.routes.eval_lab import router as eval_lab_router
 from app.database.setup import create_tables
 from app.database import models  
 from legal_analytics_api.app.routers.analytics import router as la_analytics_router
@@ -35,6 +45,7 @@ app.include_router(health_router, prefix="/api")
 app.include_router(auth_router,    prefix="/api")  
 app.include_router(upload_router, prefix="/api")
 app.include_router(analytics_router, prefix="/api")
+app.include_router(eval_lab_router, prefix="/api")
 app.include_router(la_analytics_router, prefix="/api")
 app.include_router(la_dashboard_router, prefix="/api")
 create_tables()
