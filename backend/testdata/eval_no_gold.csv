@@ -1,0 +1,3 @@
+item_id,sentence,predicted_label,rationale
+1,"The contractor shall deliver the goods within 30 days.",unambiguous,"Clear timeframe and obligation stated."
+2,"Payment terms are subject to mutual agreement.",ambiguous,"Vague: lacks specific timing/conditions."

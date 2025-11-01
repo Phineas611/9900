@@ -6,3 +6,4 @@ from .models.contract import Contract
 from .models.analysis_job import AnalysisJob
 from .models.contract_sentence import ContractSentence
 from .models.activity_log import ActivityLog
+from .models.eval_lab import EvalLabJob, EvalLabRecord

@@ -1,0 +1,27 @@
+{
+  "ambiguous": {
+    "regex": [
+      "\\b(reasonable endeavours?|best endeavours?|commercially reasonable|promptly|as soon as practicable|material|within a reasonable time)\\b"
+    ],
+    "phrases": [
+      "reasonable endeavours",
+      "best endeavours",
+      "commercially reasonable",
+      "promptly",
+      "as soon as practicable",
+      "material",
+      "within a reasonable time"
+    ]
+  },
+  "unambiguous": {
+    "regex": [
+      "\\b(within \\d+ (business )?days?|AUD ?\\d{1,3}(,\\d{3})*|Clause \\d+(\\.\\d+)?)\\b"
+    ],
+    "phrases": [
+      "within 3 business days",
+      "within 5 business days",
+      "Clause 3.2",
+      "AUD 10,000"
+    ]
+  }
+}
