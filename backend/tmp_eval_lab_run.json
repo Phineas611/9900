@@ -1,0 +1,14 @@
+{
+  "job_id": "5e4ac50c37974427bd16526135c729db",
+  "judges": ["judge-mini-a", "judge-mini-b", "judge-mini-c"],
+  "rubrics": {
+    "grammar": true,
+    "word_choice": true,
+    "cohesion": true,
+    "conciseness": true,
+    "completeness": true,
+    "correctness": true,
+    "clarity": true
+  },
+  "custom_metrics": []
+}
