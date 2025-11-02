@@ -59,7 +59,7 @@ export async function classify(sentences: SentenceItem[], model: string) {
     const res = await fetch(`${API_BASE_URL}/classify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(<ClassifyRequest>{ sentences, model }),
+        body: JSON.stringify({ sentences, model } as ClassifyRequest),
     });
     return ok<ClassifyResponse>(res);
 }
@@ -71,7 +71,7 @@ export async function explainOne(text: string, model: string, prompt?: string) {
     const res = await fetch(`${API_BASE_URL}/explain`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(<ExplainOneRequest>{ text, model, prompt }),
+        body: JSON.stringify({ text, model, prompt } as ExplainOneRequest),
     });
     return ok<ExplainOneResponse>(res);
 }
@@ -80,7 +80,7 @@ export async function explainBatch(items: SentenceItem[], model: string) {
     const res = await fetch(`${API_BASE_URL}/explain/batch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(<ExplainBatchRequest>{ items, model }),
+        body: JSON.stringify({ items, model } as ExplainBatchRequest),
     });
     return ok<ExplainBatchResponse>(res);
 }
@@ -108,6 +108,7 @@ export const mock = {
     },
 
     async explainOne(text: string, model: string): Promise<ExplainOneResponse> {
+        console.log(text);
         return {
             label: 'ambiguous',
             rationale:

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { API_BASE_URL } from '../../../services/api'
+// import { API_BASE_URL } from '../../../services/api'
 import {
   BarChart,
   Bar,
@@ -34,6 +34,7 @@ const RecurringPhrases = () => {
   const [error, setError] = useState<string | null>(null);
 
   // Fetch phrases data from API
+  /*
   const fetchPhrasesData = async (): Promise<PhrasesData> => {
     const response = await fetch(`${API_BASE_URL}/phrases/recurring`, {
       headers: {
@@ -49,6 +50,7 @@ const RecurringPhrases = () => {
     const result = await response.json();
     return result.data;
   };
+  */
 
   // Load data
   useEffect(() => {

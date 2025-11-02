@@ -38,6 +38,8 @@ const SentenceAnalysis = () => {
   const [expandedSentenceId, setExpandedSentenceId] = useState<string | null>(null);
   const itemsPerPage = 10;
 
+  console.log(stats);
+
   // Mock data for sentences
   const mockData = {
     sentences: [

@@ -32,11 +32,13 @@ interface ActivityItem {
   timestamp: string;
 }
 
+/*
 interface ApiResponse<T> {
   data: T;
   success: boolean;
   message?: string;
 }
+*/
 
 const DashboardMain = () => {
   const navigate = useNavigate();
@@ -149,6 +151,7 @@ const DashboardMain = () => {
 
       setStats(statsData);
       setActivities(activitiesData);
+      console.log(uploadsData);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load dashboard data');
       console.error('Dashboard data loading error:', err);
