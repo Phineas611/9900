@@ -1,8 +1,13 @@
 from __future__ import annotations
 import os
+import sys
+from os.path import abspath, dirname
 from logging.config import fileConfig
 from sqlalchemy import create_engine
 from alembic import context
+
+# Add the project root to the Python path
+sys.path.insert(0, abspath(dirname(dirname(__file__))))
 
 # Import SQLAlchemy Base and DATABASE_URL from app
 from app.database.setup import Base, DATABASE_URL
