@@ -33,11 +33,13 @@ class EvalLabRecord(Base):
     pk: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     job_id: Mapped[str] = mapped_column(ForeignKey("eval_lab_jobs.job_id"), index=True)
     sid: Mapped[str] = mapped_column(String(128), nullable=False)  
+    contract_id: Mapped[str] = mapped_column(String(128), nullable=True, index=True)
+    sentence_id: Mapped[str] = mapped_column(String(128), nullable=True, index=True)
     sentence: Mapped[str] = mapped_column(Text, nullable=False)
     gold_class: Mapped[str | None] = mapped_column(String(32), nullable=True)
     pred_class: Mapped[str] = mapped_column(String(32), nullable=False)
     rationale: Mapped[str] = mapped_column(Text, nullable=False)
-
+    model_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     judges_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
     consensus_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)

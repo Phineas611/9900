@@ -1,34 +1,27 @@
-from fastapi import (
-    APIRouter,
-    Depends,
-    HTTPException,
-    UploadFile,
-    File,
-)
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-from typing import List, Optional
-import io
+from typing import List, Dict, Any, Optional
 import csv
+import io
+
+import pandas as pd
 
 from app.database.setup import get_db
-from app.application.models.promptlab import (
-    ModelSwitchRequest,
-    ClassifyRequest,
-    ExplainOneRequest,
-    ExplainBatchRequest,
-    ClassifyResult,
-    ExplainResult,
-)
 from app.application.services.promptlab_service import PromptLabService
 
 router = APIRouter(prefix="/promptlab", tags=["promptlab"])
 
 service = PromptLabService()
 
+print(">>> promptlab router loaded (fixed 4-column export)")
+
 
 @router.get("/models")
-def get_models():
+def list_models():
+    """
+    Return all available models and the current one.
+    """
     return {
         "available": service.list_models(),
         "current": service.get_current_model(),
@@ -36,125 +29,183 @@ def get_models():
 
 
 @router.post("/models/switch")
-def switch_model(body: ModelSwitchRequest):
-    ok = service.switch_model(body.model_id)
+def switch_model(body: Dict[str, Any]):
+    """
+    Body: { "model_id": "..." }
+    """
+    model_id = body.get("model_id")
+    if not model_id:
+        raise HTTPException(status_code=400, detail="model_id is required")
+    ok = service.switch_model(model_id)
     if not ok:
-        raise HTTPException(status_code=404, detail="Model not found")
+        raise HTTPException(status_code=404, detail="unknown model id")
     return {"ok": True, "current": service.get_current_model()}
 
 
-@router.post("/classify", response_model=List[ClassifyResult])
+@router.get("/prompts")
+def list_prompts():
+    """
+    For frontend dropdown.
+    """
+    return {"prompts": service.list_prompts()}
+
+
+@router.post("/classify")
 def classify(
-    body: ClassifyRequest,
+    body: Dict[str, Any],
     db: Session = Depends(get_db),
 ):
+    """
+    Classify single / multiple sentences.
+    """
     sentences: List[str] = []
-    if body.sentence:
-        sentences.append(body.sentence)
-    if body.sentences:
-        sentences.extend(body.sentences)
+    if body.get("sentence"):
+        sentences.append(body["sentence"])
+    if body.get("sentences"):
+        sentences.extend(body["sentences"])
+
     if not sentences:
-        raise HTTPException(status_code=400, detail="No sentence provided")
+        raise HTTPException(status_code=400, detail="no sentence(s) provided")
 
-    return service.classify_sentences(
+    res = service.classify_sentences(
         sentences=sentences,
-        prompt_id=body.prompt_id,
-        custom_prompt=body.custom_prompt,
+        prompt_id=body.get("prompt_id"),
+        custom_prompt=body.get("custom_prompt"),
         db=db,
         user_id=0,
-        contract_id=body.contract_id,
+        contract_id=body.get("contract_id"),
     )
+    return [r.dict() for r in res]
 
 
-@router.post("/explain/one", response_model=ExplainResult)
+@router.post("/explain/one")
 def explain_one(
-    body: ExplainOneRequest,
+    body: Dict[str, Any],
     db: Session = Depends(get_db),
 ):
-    return service.explain_one(
-        sentence=body.sentence,
-        prompt_id=body.prompt_id,
-        custom_prompt=body.custom_prompt,
+    """
+    Chat-like single sentence explanation.
+    """
+    sentence = body.get("sentence")
+    if not sentence:
+        raise HTTPException(status_code=400, detail="sentence is required")
+
+    res = service.explain_one(
+        sentence=sentence,
+        prompt_id=body.get("prompt_id"),
+        custom_prompt=body.get("custom_prompt"),
         db=db,
         user_id=0,
-        contract_id=body.contract_id,
+        contract_id=body.get("contract_id"),
     )
+    return res.dict()
 
 
-@router.post("/explain/batch", response_model=List[ExplainResult])
+@router.post("/explain/batch")
 def explain_batch(
-    body: ExplainBatchRequest,
+    body: Dict[str, Any],
     db: Session = Depends(get_db),
 ):
-    if not body.sentences:
-        raise HTTPException(status_code=400, detail="No sentences provided")
+    """
+    JSON batch.
+    """
+    sentences = body.get("sentences") or []
+    if not sentences:
+        raise HTTPException(status_code=400, detail="sentences is required")
 
-    return service.explain_batch(
-        sentences=body.sentences,
-        prompt_id=body.prompt_id,
-        custom_prompt=body.custom_prompt,
+    res = service.explain_batch(
+        sentences=sentences,
+        prompt_id=body.get("prompt_id"),
+        custom_prompt=body.get("custom_prompt"),
         db=db,
         user_id=0,
-        contract_id=body.contract_id,
+        contract_id=body.get("contract_id"),
     )
+    return [r.dict() for r in res]
 
 
 @router.post("/explain/file")
-async def explain_from_file(
+async def explain_file(
     file: UploadFile = File(...),
-    prompt_id: str = "amb-basic",
-    custom_prompt: Optional[str] = None,
-    contract_id: Optional[int] = None,
+    prompt_id: str = Query(default="amb-basic"),
+    custom_prompt: Optional[str] = Query(default=None),
+    out: str = Query(default="csv", regex="^(csv|xlsx)$"),
     db: Session = Depends(get_db),
 ):
     """
-    Upload a CSV of sentences and get back a CSV with labels and rationales.
-    CSV must have header: sentence (or text / clause).
+    Upload CSV/Excel of sentences and return a CSV/XLSX with exactly:
+    item_id,sentence,predicted_label,rationale
     """
-    if file.content_type not in ("text/csv", "application/vnd.ms-excel"):
-        raise HTTPException(status_code=400, detail="Only CSV is supported right now.")
-
     raw = await file.read()
-    decoded = raw.decode("utf-8", errors="ignore")
+    filename = file.filename or ""
 
-    reader = csv.DictReader(io.StringIO(decoded))
-    sentences: List[str] = []
-    for row in reader:
-        sent = row.get("sentence") or row.get("text") or row.get("clause")
-        if sent:
-            sentences.append(sent.strip())
+    # 1. read input sentences
+    if filename.lower().endswith((".xlsx", ".xls")):
+        df = pd.read_excel(io.BytesIO(raw))
+        col = None
+        for c in ["sentence", "text", "clause", "sentences"]:
+            if c in df.columns:
+                col = c
+                break
+        if col is None:
+            col = df.columns[0]
+        sentences = df[col].fillna("").astype(str).tolist()
+    else:
+        decoded = raw.decode("utf-8", errors="ignore")
+        reader = csv.DictReader(io.StringIO(decoded))
+        sentences: List[str] = []
+        for row in reader:
+            sent = row.get("sentence") or row.get("text") or row.get("clause")
+            if sent:
+                sentences.append(sent.strip())
 
     if not sentences:
-        raise HTTPException(status_code=400, detail="No sentences found in CSV file.")
+        raise HTTPException(status_code=400, detail="No sentences found in file")
 
+    # 2. run promptlab
     results = service.explain_batch(
         sentences=sentences,
         prompt_id=prompt_id,
         custom_prompt=custom_prompt,
         db=db,
         user_id=0,
-        contract_id=contract_id,
+        contract_id=None,
     )
 
-    # build output csv (with id column)
-    output = io.StringIO()
-    writer = csv.writer(output)
-    # header you wanted
-    writer.writerow(["id", "sentence", "label", "rationale", "model_id", "contract_id", "sentence_id"])
+    # 3. build output rows
+    rows = []
     for idx, r in enumerate(results, start=1):
-        writer.writerow([
-            idx,                                 # id = row number (1-based)
-            r.sentence,
-            r.label,
-            r.rationale,
-            r.model_id,
-            r.contract_id if r.contract_id else "",
-            r.sentence_id if r.sentence_id else "",
-        ])
+        rows.append(
+            {
+                "item_id": idx,
+                "sentence": r.sentence,
+                "predicted_label": r.label,
+                "rationale": r.rationale,
+            }
+        )
 
-    output.seek(0)
-    return StreamingResponse(
-        output,
-        media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=promptlab_results.csv"},
-    )
+    # 4. export
+    if out == "csv":
+        buff = io.StringIO()
+        writer = csv.DictWriter(buff, fieldnames=["item_id", "sentence", "predicted_label", "rationale"])
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(row)
+        buff.seek(0)
+        return StreamingResponse(
+            buff,
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=promptlab_results.csv"},
+        )
+    else:
+        # xlsx
+        df_out = pd.DataFrame(rows, columns=["item_id", "sentence", "predicted_label", "rationale"])
+        bio = io.BytesIO()
+        with pd.ExcelWriter(bio, engine="openpyxl") as writer:
+            df_out.to_excel(writer, index=False, sheet_name="promptlab")
+        bio.seek(0)
+        return StreamingResponse(
+            bio,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": "attachment; filename=promptlab_results.xlsx"},
+        )

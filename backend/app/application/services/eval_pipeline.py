@@ -22,6 +22,7 @@ def run_job(
     custom_metrics: Optional[List[str]],
 ):
     job = session.get(EvalLabJob, job_id)
+    cols = job.columns_map
     assert job, f"job not found: {job_id}"
 
     df, cols = load_table(job.file_path)
@@ -50,7 +51,7 @@ def run_job(
         total += 1
         sid = str(row[cols["id"]])
         sentence = str(row[cols["sentence"]])
-        pred_class = norm_label(row[cols["pred_class"]])
+        pred_class = norm_label(row[cols["label"]])
         rationale = str(row[cols["rationale"]])
         gold_class: Optional[Label] = None
         if "gold_class" in cols and cols["gold_class"] in row and not pd.isna(row[cols["gold_class"]]):

@@ -1,0 +1,6 @@
+id,sentence,label,rationale,gold_class,contract_id,sentence_id,model_id
+1,"The contracting party shall pay the full amount within 30 days.",ambiguous,"The starting time of '30 days' is not clear. It may be calculated from the date of contract signing, invoice date or service completion date.",unambiguous,CONT-001,SENT-001,GPT-4
+2,"Party B shall make every effort to complete the project.",ambiguous,"'最大努力'是主观术语，没有明确的衡量标准。",ambiguous,CONT-001,SENT-002,GPT-4
+3,"If any unforeseen circumstances arise, the contract may be terminated.",ambiguous,"'不可抗力'没有明确定义，范围不明确。",ambiguous,CONT-002,SENT-003,Claude-3
+4,"Party A shall pay 10,000 yuan per month as service fee.",unambiguous,"金额明确，支付周期明确。",unambiguous,CONT-002,SENT-004,Claude-3
+5,"Delivery should be completed within a reasonable time.",ambiguous,"'合理时间'是主观判断，没有具体期限。",ambiguous,CONT-003,SENT-005,GPT-3.5
