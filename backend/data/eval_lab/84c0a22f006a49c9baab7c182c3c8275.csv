@@ -1,0 +1,4 @@
+id,sentence,label,rationale,gold_class,contract_id,sentence_id,model_id
+1,本合同自签订之日起生效,有效条款,该条款明确规定了合同的生效时间,有效条款,CONT001,SENT001,GPT-4
+2,乙方应在收到甲方通知后10个工作日内完成交付,义务条款,该条款规定了乙方的交付义务和时限,义务条款,CONT001,SENT002,GPT-4
+3,如有争议，双方应协商解决,争议解决条款,该条款规定了争议的初步解决方式,争议解决条款,CONT002,SENT001,Claude-3
