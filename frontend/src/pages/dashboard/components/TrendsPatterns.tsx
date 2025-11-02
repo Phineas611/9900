@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../../../services/api'
 import {
   BarChart,
   Bar,
@@ -43,8 +44,6 @@ const TrendsPatterns = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [timeRange, setTimeRange] = useState('3months');
-
-  const API_BASE_URL = 'api';
 
   // Fetch chart data from API
   const fetchChartData = async (range: string): Promise<ChartData> => {

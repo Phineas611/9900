@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { API_BASE_URL } from '../services/api';
 import './LoginPage.css';
 
 interface LoginPageProps {
@@ -40,7 +41,7 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
     // navigate('/dashboard');
     // return;
 
-    fetch(`/api/auth/login`, {
+    fetch(`${API_BASE_URL}/auth/login`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

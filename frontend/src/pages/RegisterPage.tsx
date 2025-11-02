@@ -1,5 +1,6 @@
 import { useState} from 'react';
 import { useNavigate } from 'react-router-dom';
+import { API_BASE_URL } from '../services/api';
 import './RegisterPage.css';
 
 // Register component page
@@ -49,7 +50,7 @@ const RegisterPage = () => {
       return;
     }
 
-    fetch(`/api/auth/register`, {
+    fetch(`${API_BASE_URL}/auth/register`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

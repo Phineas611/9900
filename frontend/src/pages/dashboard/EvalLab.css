@@ -1,0 +1,415 @@
+.eval-lab {
+  padding: 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  text-align: left;
+}
+
+.eval-lab h2 {
+  color: #1a202c;
+  margin-bottom: 24px;
+  font-size: 1.8rem;
+  font-weight: 600;
+}
+
+.eval-lab h3 {
+  color: #2d3748;
+  margin-bottom: 16px;
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+/* Error Message */
+.error-message {
+  background: #fed7d7;
+  color: #c53030;
+  padding: 12px 16px;
+  border-radius: 6px;
+  border-left: 4px solid #e53e3e;
+  margin-bottom: 20px;
+  font-weight: 500;
+}
+
+/* Panels */
+.config-panel,
+.upload-panel,
+.status-panel,
+.records-panel {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Configuration Section */
+.config-section {
+  margin-bottom: 20px;
+}
+
+.config-section:last-child {
+  margin-bottom: 0;
+}
+
+.config-section strong {
+  display: block;
+  margin-bottom: 12px;
+  color: #2d3748;
+  font-size: 0.95rem;
+}
+
+.judges-list,
+.rubrics-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.judge-item,
+.rubric-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: #f7fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 0.9rem;
+}
+
+.judge-item:hover,
+.rubric-item:hover {
+  border-color: #3182ce;
+  background: #edf2f7;
+}
+
+.judge-item input,
+.rubric-item input {
+  margin: 0;
+}
+
+/* Upload Panel */
+.upload-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.file-upload-area {
+  position: relative;
+}
+
+.file-input {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+}
+
+.file-upload-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  border: 2px dashed #cbd5e0;
+  border-radius: 8px;
+  background: #fafafa;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-align: center;
+}
+
+.file-upload-label:hover {
+  border-color: #3182ce;
+  background: #f0f4f8;
+}
+
+.file-upload-label.drag-over {
+  border-color: #3182ce;
+  background: #ebf8ff;
+}
+
+.upload-icon {
+  font-size: 2rem;
+  margin-bottom: 12px;
+  opacity: 0.7;
+}
+
+.upload-text {
+  margin-bottom: 8px;
+}
+
+.upload-title {
+  font-weight: 600;
+  color: #2d3748;
+  margin-bottom: 4px;
+}
+
+.upload-subtitle {
+  font-size: 0.9rem;
+  color: #718096;
+}
+
+.file-types {
+  font-size: 0.8rem;
+  color: #a0aec0;
+}
+
+.selected-file {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 12px;
+  background: #edf2f7;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+}
+
+.file-name {
+  font-weight: 500;
+  color: #2d3748;
+}
+
+.file-size {
+  font-size: 0.85rem;
+  color: #718096;
+}
+
+.upload-btn,
+.run-btn {
+  background: #3182ce;
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: background-color 0.2s;
+  min-width: 120px;
+  align-self: flex-start;
+}
+
+.upload-btn:hover:not(:disabled),
+.run-btn:hover:not(:disabled) {
+  background: #2c5aa0;
+}
+
+.upload-btn:disabled,
+.run-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.upload-info {
+  padding-top: 16px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.job-id {
+  font-size: 0.9rem;
+  color: #4a5568;
+  margin-bottom: 12px;
+}
+
+/* Status Panel */
+.status-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.progress-info {
+  font-weight: 500;
+  color: #2d3748;
+}
+
+.progress-bar {
+  height: 8px;
+  background: #e2e8f0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: #38a169;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.metrics-summary strong {
+  display: block;
+  margin-bottom: 8px;
+  color: #2d3748;
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.metric-item {
+  background: #f7fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  padding: 8px 12px;
+  font-size: 0.85rem;
+}
+
+/* Records Panel */
+.export-buttons {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.export-btn {
+  background: #718096;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.export-btn:hover {
+  background: #4a5568;
+}
+
+.records-count {
+  font-weight: 500;
+  margin-bottom: 12px;
+  color: #2d3748;
+}
+
+.records-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 16px 0;
+  max-height: 400px;
+  overflow-y: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+}
+
+.record-item {
+  border-bottom: 1px solid #e2e8f0;
+  padding: 16px;
+  background: white;
+}
+
+.record-item:last-child {
+  border-bottom: none;
+}
+
+.record-item:hover {
+  background: #f7fafc;
+}
+
+.sentence-text {
+  font-weight: 500;
+  color: #2d3748;
+  margin-bottom: 8px;
+  line-height: 1.4;
+}
+
+.record-meta {
+  font-size: 0.8rem;
+  color: #718096;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.pagination button {
+  background: white;
+  border: 1px solid #e2e8f0;
+  color: #4a5568;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all 0.2s;
+}
+
+.pagination button:hover:not(:disabled) {
+  background: #edf2f7;
+  border-color: #cbd5e0;
+}
+
+.pagination button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pagination select {
+  padding: 6px 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  background: white;
+  font-size: 0.85rem;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .eval-lab {
+    padding: 16px;
+  }
+  
+  .config-panel,
+  .upload-panel,
+  .status-panel,
+  .records-panel {
+    padding: 16px;
+  }
+  
+  .judges-list,
+  .rubrics-list {
+    flex-direction: column;
+  }
+  
+  .metrics-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .pagination {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .file-upload-label {
+    padding: 30px 15px;
+  }
+  
+  .upload-icon {
+    font-size: 1.5rem;
+  }
+  
+  .upload-btn,
+  .run-btn {
+    align-self: stretch;
+    text-align: center;
+  }
+  
+  .export-buttons {
+    flex-direction: column;
+  }
+}

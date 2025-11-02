@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { API_BASE_URL } from '../../services/api'
 import './UploadPage.css';
 
 const UploadPage = () => {
@@ -10,9 +11,6 @@ const UploadPage = () => {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
-  
-  // API base URL
-  const API_BASE_URL = '/api';
 
   // Handle drag events
   const handleDrag = (e: React.DragEvent) => {
