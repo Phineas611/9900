@@ -61,7 +61,11 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
           onLogin(email, data.token, data.name);
           navigate('/dashboard_main');
         } else {
-          setMsg(data.detail);
+          if (Array.isArray(data.detail)) {
+            setMsg(data.detail[0].msg);
+          } else {
+            setMsg(data.detail);
+          }
         }
       })
       .catch(error => {

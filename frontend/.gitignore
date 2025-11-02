@@ -43,3 +43,4 @@ build/
 # App outputs/temp
 outputs/
 tmp/
+.vercel

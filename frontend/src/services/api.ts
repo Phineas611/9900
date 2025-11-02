@@ -35,7 +35,7 @@ export type ExplainBatchResponse = SentenceItem[];
  *  - .env: VITE_API_URL=http://localhost:8000/api
  *  - fallback: '/api' (via dev proxy)
  *  ============================ */
-export const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'https://legalcontractanalyzer-backend.onrender.com/api';
+export const API_BASE_URL = import.meta.env.VITE_API_URL ?? '/api';
 
 /** Guard: throw on non-2xx and parse JSON as T */
 async function ok<T>(res: Response): Promise<T> {
