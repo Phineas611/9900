@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { explainOne, mock } from '../services/api';
+import { mock } from '../services/api';
 
 export default function ExplainChat() {
     const [input, setInput] = useState('');

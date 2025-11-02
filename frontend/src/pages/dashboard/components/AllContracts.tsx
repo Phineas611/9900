@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { API_BASE_URL } from '../../../services/api'
+// import { API_BASE_URL } from '../../../services/api'
 import './AllContracts.css';
 
 // Types
@@ -25,11 +25,13 @@ interface Contract {
   tags: string[];
 }
 
+/*
 interface ApiResponse<T> {
   data: T;
   success: boolean;
   message?: string;
 }
+*/
 
 const AllContracts = () => {
   // State management
@@ -83,7 +85,7 @@ const AllContracts = () => {
     limit: number, 
     search: string, 
     type: string, 
-    status: string
+    _: string
   ): Promise<{ items: Contract[]; total: number }> => {
     const mockContracts: Contract[] = [
       {

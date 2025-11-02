@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { API_BASE_URL } from '../../../services/api'
+// import { API_BASE_URL } from '../../../services/api'
 import {
   BarChart,
   Bar,
@@ -46,6 +46,7 @@ const TrendsPatterns = () => {
   const [timeRange, setTimeRange] = useState('3months');
 
   // Fetch chart data from API
+  /*
   const fetchChartData = async (range: string): Promise<ChartData> => {
     const response = await fetch(`${API_BASE_URL}/charts/trends?range=${range}`, {
       headers: {
@@ -61,6 +62,7 @@ const TrendsPatterns = () => {
     const result = await response.json();
     return result.data;
   };
+  */
 
   // Load data when component mounts or time range changes
   useEffect(() => {
@@ -276,7 +278,7 @@ const TrendsPatterns = () => {
                     dataKey="value"
                     nameKey="type"
                   >
-                    {data.contractTypes.map((entry, index) => (
+                    {data.contractTypes.map((_, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
