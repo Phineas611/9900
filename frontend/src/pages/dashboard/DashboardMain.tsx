@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { API_BASE_URL } from '../../services/api'
 import './DashboardMain.css';
 
 // Type definition
@@ -50,9 +51,6 @@ const DashboardMain = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(5);
   const [totalItems, setTotalItems] = useState(0);
-
-  // API Base URL
-  const API_BASE_URL = '/api';
 
   // Obtain statistical data
   const fetchStats = async (): Promise<StatsData> => {

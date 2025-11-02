@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../../../services/api'
 import './AllContracts.css';
 
 // Types
@@ -46,9 +47,6 @@ const AllContracts = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
   const [totalItems, setTotalItems] = useState(0);
-
-  // API base URL
-  const API_BASE_URL = 'api';
 
   // Fetch contract statistics
   const fetchContractStats = async (): Promise<ContractStats> => {

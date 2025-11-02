@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../../../services/api'
 import {
   BarChart,
   Bar,
@@ -31,8 +32,6 @@ const RecurringPhrases = () => {
   const [data, setData] = useState<PhrasesData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  const API_BASE_URL = 'api';
 
   // Fetch phrases data from API
   const fetchPhrasesData = async (): Promise<PhrasesData> => {

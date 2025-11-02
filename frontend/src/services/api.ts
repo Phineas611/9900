@@ -35,7 +35,7 @@ export type ExplainBatchResponse = SentenceItem[];
  *  - .env: VITE_API_URL=http://localhost:8000/api
  *  - fallback: '/api' (via dev proxy)
  *  ============================ */
-const BASE = import.meta.env.VITE_API_URL ?? '/api';
+export const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'https://legalcontractanalyzer-backend.onrender.com/api';
 
 /** Guard: throw on non-2xx and parse JSON as T */
 async function ok<T>(res: Response): Promise<T> {
@@ -50,13 +50,13 @@ async function ok<T>(res: Response): Promise<T> {
  *  PROJ6-2 — Extraction & Classification
  *  ============================ */
 export async function getExtractedSentences(jobId: string): Promise<SentenceItem[]> {
-    const res = await fetch(`${BASE}/extract/${encodeURIComponent(jobId)}`);
+    const res = await fetch(`${API_BASE_URL}/extract/${encodeURIComponent(jobId)}`);
     const data = await ok<{ sentences: SentenceItem[] }>(res);
     return data.sentences;
 }
 
 export async function classify(sentences: SentenceItem[], model: string) {
-    const res = await fetch(`${BASE}/classify`, {
+    const res = await fetch(`${API_BASE_URL}/classify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(<ClassifyRequest>{ sentences, model }),
@@ -68,7 +68,7 @@ export async function classify(sentences: SentenceItem[], model: string) {
  *  PROJ6-3 — Plain-English Explanations
  *  ============================ */
 export async function explainOne(text: string, model: string, prompt?: string) {
-    const res = await fetch(`${BASE}/explain`, {
+    const res = await fetch(`${API_BASE_URL}/explain`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(<ExplainOneRequest>{ text, model, prompt }),
@@ -77,7 +77,7 @@ export async function explainOne(text: string, model: string, prompt?: string) {
 }
 
 export async function explainBatch(items: SentenceItem[], model: string) {
-    const res = await fetch(`${BASE}/explain/batch`, {
+    const res = await fetch(`${API_BASE_URL}/explain/batch`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(<ExplainBatchRequest>{ items, model }),
