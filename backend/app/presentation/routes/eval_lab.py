@@ -122,18 +122,24 @@ def list_records(
     page: int = Query(1, ge=1),
     page_size: int = Query(12, ge=1, le=50),
     judges: str = Query("", description="Comma-separated IDs of the judges, only the results of these judges will be returned; if empty, all will be returned."),
+    contract_id: Optional[str] = Query(None, description="Filter by contract ID."),
+    sentence_id: Optional[str] = Query(None, description="Filter by sentence ID."),
     db: Session = Depends(get_db),
 ):
     ids: Optional[List[str]] = [x for x in judges.split(",") if x] if judges else None
 
+    query = select(EvalLabRecord).where(EvalLabRecord.job_id == job_id)
+    if contract_id:
+        query = query.where(EvalLabRecord.contract_id == contract_id)
+    if sentence_id:
+        query = query.where(EvalLabRecord.sentence_id == sentence_id)
+
     total = db.execute(
-        select(func.count()).select_from(EvalLabRecord).where(EvalLabRecord.job_id == job_id)
+        select(func.count()).select_from(query.subquery())
     ).scalar_one()
 
     rows = db.execute(
-        select(EvalLabRecord)
-        .where(EvalLabRecord.job_id == job_id)
-        .order_by(EvalLabRecord.pk.desc())
+        query.order_by(EvalLabRecord.pk.desc())
         .offset((page - 1) * page_size)
         .limit(page_size)
     ).scalars().all()

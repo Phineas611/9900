@@ -1,7 +1,1 @@
-{
-  "run_id": "c2dc14e9-c513-415a-b970-03f267c2678b",
-  "require_json": true,
-  "judge_models": ["hf/prometheus-7b-v2.0", "hf/prometheus-7b-v2.0", "hf/prometheus-7b-v2.0"],
-  "temperature": 0.0,
-  "page_limit": 50
-}
+{"job_id": "84c0a22f006a49c9baab7c182c3c8275", "judges": ["hf:google/gemma-7b"], "rubrics": {"grammar": true, "word_choice": true, "cohesion": true, "conciseness": true, "completeness": true, "correctness": true, "clarity": true}}
