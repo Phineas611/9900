@@ -136,12 +136,14 @@ async def explain_from_file(
         contract_id=contract_id,
     )
 
-    # build output csv
+    # build output csv (with id column)
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["sentence", "label", "rationale", "model_id", "contract_id", "sentence_id"])
-    for r in results:
+    # header you wanted
+    writer.writerow(["id", "sentence", "label", "rationale", "model_id", "contract_id", "sentence_id"])
+    for idx, r in enumerate(results, start=1):
         writer.writerow([
+            idx,                                 # id = row number (1-based)
             r.sentence,
             r.label,
             r.rationale,
