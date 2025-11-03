@@ -31,13 +31,18 @@ class UploadService:
     
     @staticmethod
     def validate_file(file: UploadFile) -> bool:
-  
-        if hasattr(file, 'size') and file.size > UploadService.MAX_FILE_SIZE:
+        """Validate uploaded file type and size"""
+        # Check file size if available
+        if hasattr(file, 'size') and file.size and file.size > UploadService.MAX_FILE_SIZE:
             return False
+        
+        # Check file extension
         file_path = Path(file.filename or "")
         if file_path.suffix.lower() not in UploadService.ALLOWED_EXTENSIONS:
             return False
-        if file.content_type not in UploadService.ALLOWED_MIME_TYPES:
+        
+        # Check MIME type (allow None for some clients that don't send it)
+        if file.content_type and file.content_type not in UploadService.ALLOWED_MIME_TYPES:
             return False
         
         return True
