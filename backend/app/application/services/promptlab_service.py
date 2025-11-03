@@ -111,7 +111,10 @@ class PromptLabService:
     def _get_hf_client(self) -> InferenceClient:
         hf_token = os.environ.get("HF_API_TOKEN")
         if not hf_token:
-            raise RuntimeError("HF_API_TOKEN is not set in environment.")
+            raise RuntimeError(
+                "HF_API_TOKEN is not set in environment. "
+                "Please set it in Render Dashboard > Environment Variables."
+            )
         # 有的版本叫 token，有的文档叫 api_key；token 在各版本都可用
         return InferenceClient(token=hf_token, timeout=90)
 
@@ -162,7 +165,8 @@ class PromptLabService:
                 body = getattr(getattr(e, "response", None), "text", "") or str(e)
                 last_err = f"status={status} body={(body[:300]).replace(chr(10),' ')}"
                 print(f"[HF][attempt {attempt}] {last_err}")
-                if status in (429, 503):
+                # Retry on rate limit (429), service unavailable (503), and bad gateway (502)
+                if status in (429, 502, 503):
                     continue
                 break  
             except Exception as e:
