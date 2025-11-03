@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from app.database.setup import get_db
-from sqlalchemy import text
+from sqlalchemy import text, delete
 from typing import List, Optional
 from datetime import datetime, timedelta, timezone
 from app.application.auth import get_current_user  
@@ -11,7 +11,13 @@ from uuid import uuid4
 from app.database.models.analysis_job import AnalysisJob
 from app.database.models.contract_sentence import ContractSentence
 from app.persistence.contract_repository import get_contract_by_id
-
+from app.application.services.analytics_service import AnalyticsService
+from fastapi.responses import StreamingResponse
+from app.application.models.analytics import (
+    TrendChartResponse, RecurringPhrasesResponse,
+    ContractsListResponse, ContractStatsResponse,
+    ExtractedSentencesResponse, ReportsData, ExportReportRequest
+)
 router = APIRouter()
 
 @router.get("/analytics/kpi")
@@ -62,15 +68,15 @@ def get_kpi_analytics(db: Session = Depends(get_db)):
         )
         total_contracts_prev = db.execute(total_contracts_query_prev, {"start": prev_start, "end": prev_end}).scalar_one_or_none() or 0
 
-        # Sentences and ambiguous counts — aggregate from analysis_jobs per completed jobs (trend windows)
+        # Sentences and ambiguous counts — aggregate from contract_sentences per contracts
         sentences_query_cur = text(
             """
-            SELECT COALESCE(SUM(total_sentences),0) AS total_sentences,
-                   COALESCE(SUM(ambiguous_count),0) AS ambiguous_sentences
-            FROM analysis_jobs
-            WHERE status = 'COMPLETED'
-              AND finished_at IS NOT NULL
-              AND finished_at BETWEEN :start AND :end
+            SELECT COUNT(*) AS total_sentences,
+                   SUM(CASE WHEN is_ambiguous = 1 OR is_ambiguous IS TRUE THEN 1 ELSE 0 END) AS ambiguous_sentences
+            FROM contract_sentences cs
+            JOIN contracts c ON c.id = cs.contract_id
+            WHERE c.processing_status = 'completed'
+              AND cs.created_at BETWEEN :start AND :end
             """
         )
         s_cur_row = db.execute(sentences_query_cur, {"start": cur_start, "end": now}).first()
@@ -79,39 +85,39 @@ def get_kpi_analytics(db: Session = Depends(get_db)):
 
         sentences_query_prev = text(
             """
-            SELECT COALESCE(SUM(total_sentences),0) AS total_sentences,
-                   COALESCE(SUM(ambiguous_count),0) AS ambiguous_sentences
-            FROM analysis_jobs
-            WHERE status = 'COMPLETED'
-              AND finished_at IS NOT NULL
-              AND finished_at BETWEEN :start AND :end
+            SELECT COUNT(*) AS total_sentences,
+                   SUM(CASE WHEN is_ambiguous = 1 OR is_ambiguous IS TRUE THEN 1 ELSE 0 END) AS ambiguous_sentences
+            FROM contract_sentences cs
+            JOIN contracts c ON c.id = cs.contract_id
+            WHERE c.processing_status = 'completed'
+              AND cs.created_at BETWEEN :start AND :end
             """
         )
         s_prev_row = db.execute(sentences_query_prev, {"start": prev_start, "end": prev_end}).first()
         total_sentences_prev = (s_prev_row[0] if s_prev_row and s_prev_row[0] is not None else 0)
         ambiguous_sentences_prev = (s_prev_row[1] if s_prev_row and s_prev_row[1] is not None else 0)
 
-        # Average explanation clarity — prefer job-level aggregated clarity per completed jobs
+        # Average explanation clarity — aggregate from contract_sentences
         avg_clarity_query_cur = text(
             """
-            SELECT ROUND(AVG(avg_explanation_clarity), 2)
-            FROM analysis_jobs
-            WHERE status = 'COMPLETED'
-              AND avg_explanation_clarity IS NOT NULL
-              AND finished_at IS NOT NULL
-              AND finished_at BETWEEN :start AND :end
+            SELECT ROUND(AVG(cs.clarity_score), 2)
+            FROM contract_sentences cs
+            JOIN contracts c ON c.id = cs.contract_id
+            WHERE c.processing_status = 'completed'
+              AND cs.clarity_score IS NOT NULL
+              AND cs.created_at BETWEEN :start AND :end
             """
         )
         avg_explanation_clarity_cur = db.execute(avg_clarity_query_cur, {"start": cur_start, "end": now}).scalar_one_or_none() or 0.0
 
         avg_clarity_query_prev = text(
             """
-            SELECT ROUND(AVG(avg_explanation_clarity), 2)
-            FROM analysis_jobs
-            WHERE status = 'COMPLETED'
-              AND avg_explanation_clarity IS NOT NULL
-              AND finished_at IS NOT NULL
-              AND finished_at BETWEEN :start AND :end
+            SELECT ROUND(AVG(cs.clarity_score), 2)
+            FROM contract_sentences cs
+            JOIN contracts c ON c.id = cs.contract_id
+            WHERE c.processing_status = 'completed'
+              AND cs.clarity_score IS NOT NULL
+              AND cs.created_at BETWEEN :start AND :end
             """
         )
         avg_explanation_clarity_prev = db.execute(avg_clarity_query_prev, {"start": prev_start, "end": prev_end}).scalar_one_or_none() or 0.0
@@ -297,26 +303,51 @@ def import_contract_sentences(
         db.commit()
 
 
+        # Update or insert sentences - preserve existing analysis data
+        existing_sentences = {
+            (cs.page, cs.sentence_id, cs.sentence): cs
+            for cs in db.query(ContractSentence).filter(
+                ContractSentence.contract_id == contract_id
+            ).all()
+        }
+        
         objs = []
         for _, row in df.iterrows():
-            objs.append(ContractSentence(
-                job_id=job_id,
-                contract_id=contract_id,
-                file_name=str(row.get("file_name") or contract.file_name or ""),
-                file_type=str(row.get("file_type") or contract.file_type or ""),
-                page=int(row.get("page")) if not pd.isna(row.get("page")) else None,
-                sentence_id=int(row.get("sentence_id")) if not pd.isna(row.get("sentence_id")) else None,
-                section=None,
-                subsection=None,
-                sentence=str(row.get("sentence") or ""),
-                sentence_vec=None,
-                label=None,
-                is_ambiguous=None,
-                explanation=None,
-                suggested_revision=None,
-                clarity_score=None
-            ))
-        db.bulk_save_objects(objs)
+            page = int(row.get("page")) if not pd.isna(row.get("page")) else None
+            sentence_id = int(row.get("sentence_id")) if not pd.isna(row.get("sentence_id")) else None
+            sentence = str(row.get("sentence") or "")
+            
+            # Check if sentence already exists
+            key = (page, sentence_id, sentence)
+            if key in existing_sentences:
+                # Update existing record - only update basic fields, preserve analysis data
+                existing = existing_sentences[key]
+                existing.job_id = job_id  # Update job_id
+                existing.file_name = str(row.get("file_name") or contract.file_name or existing.file_name)
+                existing.file_type = str(row.get("file_type") or contract.file_type or existing.file_type)
+                # Keep existing label, is_ambiguous, explanation, clarity_score, etc.
+            else:
+                # Create new record
+                objs.append(ContractSentence(
+                    job_id=job_id,
+                    contract_id=contract_id,
+                    file_name=str(row.get("file_name") or contract.file_name or ""),
+                    file_type=str(row.get("file_type") or contract.file_type or ""),
+                    page=page,
+                    sentence_id=sentence_id,
+                    section=None,
+                    subsection=None,
+                    sentence=sentence,
+                    sentence_vec=None,
+                    label=None,
+                    is_ambiguous=None,
+                    explanation=None,
+                    suggested_revision=None,
+                    clarity_score=None
+                ))
+        
+        if objs:
+            db.bulk_save_objects(objs)
         db.commit()
 
         return {
@@ -325,6 +356,125 @@ def import_contract_sentences(
             "imported_count": len(objs),
             "csv_path": str(csv_path)
         }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+@router.get("/charts/trends", response_model=TrendChartResponse)
+def get_trends_chart(
+    range: str = Query("3months", description="Time range: 1month, 3months, 6months, 1year"),
+    db: Session = Depends(get_db)
+):
+    """Get trend chart data"""
+    try:
+        days_map = {
+            "1month": 30,
+            "3months": 90,
+            "6months": 180,
+            "1year": 365
+        }
+        days = days_map.get(range, 90)
+        
+        data = AnalyticsService.get_trends_chart_data(db, days)
+        return TrendChartResponse(data=data)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/phrases/recurring", response_model=RecurringPhrasesResponse)
+def get_recurring_phrases(
+    limit: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db)
+):
+    """Get recurring ambiguous phrases"""
+    try:
+        data = AnalyticsService.get_recurring_phrases_data(db, limit)
+        return RecurringPhrasesResponse(data=data)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/contracts", response_model=ContractsListResponse)
+def get_contracts(
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1, le=100),
+    search: str = Query(""),
+    type: str = Query(""),
+    status: str = Query(""),
+    db: Session = Depends(get_db)
+):
+    """Get contracts list with filters and pagination"""
+    try:
+        return AnalyticsService.get_contracts_list(db, page, limit, search, type, status)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/contracts/stats", response_model=ContractStatsResponse)
+def get_contract_stats(db: Session = Depends(get_db)):
+    """Get contract statistics"""
+    try:
+        return AnalyticsService.get_contract_stats(db)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/extract/{job_id}", response_model=ExtractedSentencesResponse)
+def get_extracted_sentences(job_id: str, db: Session = Depends(get_db)):
+    """Get extracted sentences for a job"""
+    try:
+        return AnalyticsService.get_extracted_sentences(db, job_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+@router.get("/reports/data", response_model=ReportsData)
+def get_reports_data(
+    range: str = Query("6months", description="Time range: 1month, 3months, 6months"),
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Get complete reports data"""
+    try:
+        days_map = {
+            "1month": 30,
+            "3months": 90,
+            "6months": 180,
+            "1year": 365
+        }
+        days = days_map.get(range, 180)
+        
+        data = AnalyticsService.get_reports_data(db, days)
+        return data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/reports/export")
+def export_report(
+    request: ExportReportRequest,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Export comprehensive analysis report"""
+    try:
+        buffer = AnalyticsService.export_report(db, request.format)
+        
+        timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
+        
+        if request.format == 'csv':
+            filename = f"contract_report_{timestamp}.csv"
+            media_type = "text/csv"
+        elif request.format == 'excel':
+            filename = f"contract_report_{timestamp}.xlsx"
+            media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        else:
+            raise HTTPException(400, f"Unsupported format: {request.format}")
+        
+        return StreamingResponse(
+            buffer,
+            media_type=media_type,
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+        )
     except HTTPException:
         raise
     except Exception as e:
