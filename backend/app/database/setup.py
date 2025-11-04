@@ -13,36 +13,19 @@ backend_dir = Path(__file__).parent.parent.parent
 
 # Priority order for database path:
 # 1. Environment variable (if set)
-# 2. Old location: backend/app.db
-# 3. New location: backend/data/app.db
-# 4. Create in new location or backend directory (avoid /tmp for persistence)
+# 2. backend/app.db (always use this location)
 
 # Check environment variable first
 if os.getenv("DATABASE_PATH"):
     db_path = os.getenv("DATABASE_PATH")
     logger.info(f"Using database path from environment variable: {db_path}")
 else:
-    old_db_path = backend_dir / "app.db"
-    new_db_dir = backend_dir / "data"
-    new_db_path = new_db_dir / "app.db"
-    
-    # Check for existing database files
-    if old_db_path.exists():
-        db_path = str(old_db_path)
-        logger.info(f"Using existing database from old location: {db_path}")
-    elif new_db_path.exists():
-        db_path = str(new_db_path)
-        logger.info(f"Using existing database from new location: {db_path}")
+    # Always use backend/app.db
+    db_path = str(backend_dir / "app.db")
+    if Path(db_path).exists():
+        logger.info(f"Using existing database: {db_path}")
     else:
-        # Create new database - prefer project directory (persistent)
-        try:
-            new_db_dir.mkdir(parents=True, exist_ok=True)
-            db_path = str(new_db_path)
-            logger.info(f"Creating new database in: {db_path}")
-        except (PermissionError, OSError) as e:
-            # Fallback to backend directory if data directory not writable
-            db_path = str(old_db_path)
-            logger.warning(f"Cannot create data directory, using backend directory: {db_path}, error: {e}")
+        logger.info(f"Creating new database: {db_path}")
 
 DATABASE_URL = f"sqlite:///{db_path}"
 logger.info(f"Database URL: {DATABASE_URL}")
