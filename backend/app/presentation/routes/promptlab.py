@@ -132,7 +132,6 @@ async def explain_file(
     logger = logging.getLogger(__name__)
     
     MAX_FILE_SIZE = 10 * 1024 * 1024
-    MAX_SENTENCES = 500 
     
     if file.size and file.size > MAX_FILE_SIZE:
         raise HTTPException(
@@ -171,12 +170,6 @@ async def explain_file(
 
     if not sentences:
         raise HTTPException(status_code=400, detail="No sentences found in file")
-    
-    if len(sentences) > MAX_SENTENCES:
-        raise HTTPException(
-            status_code=400, 
-            detail=f"Too many sentences (max {MAX_SENTENCES}). Please split your file."
-        )
     
     logger.info(f"Extracted {len(sentences)} sentences from file")
 
