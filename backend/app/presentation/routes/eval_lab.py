@@ -21,8 +21,10 @@ from app.application.models.eval_lab import (
     DEFAULT_RUBRICS,
 )
 from app.application.services.eval_io import load_table, detect_columns
-from app.application.services.eval_pipeline import run_job
 from app.application.services.judges import get_available_judges
+from app.application.models.evaluation import AssessRequest, DEFAULT_JUDGES
+from app.persistence.evaluation_repository import EvaluationRepository
+from app.application.services.evaluation_service import EvaluationService
 
 
 router = APIRouter(prefix="/eval-lab", tags=["Evaluation Lab"])
@@ -82,19 +84,137 @@ async def upload_result_file(
 
 
 @router.post("/run")
-def run_evaluation(req: EvalRunRequest, db: Session = Depends(get_db)):
+async def run_evaluation(req: EvalRunRequest, db: Session = Depends(get_db)):
     job = db.get(EvalLabJob, req.job_id)
     if not job:
         raise HTTPException(status_code=404, detail="job not found")
 
-    run_job(
-        session=db,
-        job_id=req.job_id,
-        judges=req.judges,
-        rubrics_on=req.rubrics,
-        custom_metrics=req.custom_metrics,
+    # 读取原文件并映射列
+    try:
+        df, cols = load_table(job.file_path)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to parse file: {e}")
+
+    # 创建 EvaluationService 运行并批量插入条目
+    repo = EvaluationRepository()
+    svc = EvaluationService(repo)
+    run_id = uuid.uuid4().hex
+    repo.create_run(db, run_id=run_id, user_id=1, file_name=os.path.basename(job.file_path), config={
+        "job_id": job.job_id,
+        "columns_map": cols,
+    })
+
+    rows = []
+    id_col = cols.get("id")
+    sent_col = cols.get("sentence")
+    label_col = cols.get("label")
+    rat_col = cols.get("rationale")
+    gold_col = cols.get("gold_class")
+    if not (id_col and sent_col and label_col and rat_col):
+        raise HTTPException(status_code=400, detail=f"Missing required columns after detection: {cols}")
+
+    for _, r in df.iterrows():
+        row = {
+            "item_id": str(r[id_col]),
+            "sentence": str(r[sent_col]),
+            "predicted_label": str(r[label_col]),
+            "rationale": str(r[rat_col]),
+        }
+        if gold_col and gold_col in r and pd.notna(r[gold_col]):
+            row["gold_label"] = str(r[gold_col])
+        rows.append(row)
+    repo.bulk_insert_items(db, run_id, rows)
+
+    # 评审配置映射
+    judge_models = req.judges or DEFAULT_JUDGES[:]
+    crit = req.rubrics or {k: True for k in DEFAULT_RUBRICS}
+    manual_metrics = req.custom_metrics or []
+    assess_req = AssessRequest(
+        run_id=run_id,
+        judge_models=judge_models,
+        criteria=crit,  # type: ignore
+        manual_metrics=manual_metrics,
+        page_limit=len(rows),
+        temperature=0.0,
+        require_json=True,
     )
-    db.refresh(job)
+
+    # 异步批量评审
+    result = await svc.assess_async(db, user_id=1, req=assess_req)
+
+    # 将评审结果回填到 EvalLabRecord 以保持前端兼容
+    from datetime import datetime, timezone
+    job.started_at = datetime.now(timezone.utc)
+    job.judges = judge_models
+    job.rubrics = [k for k, on in crit.items() if on]
+    job.custom_metrics = manual_metrics
+
+    # 汇总与逐条记录
+    total = 0
+    finished = 0
+    class_ok_total = 0
+    rationale_pass_total = 0
+
+    # 拉取评审明细并转换为 EvalLabRecord
+    pairs, _ = repo.list_results(db, run_id, page=1, page_size=len(rows))
+    for item, agg in pairs:
+        total += 1
+        # 提取每条的所有裁决
+        js = repo.list_judgments_for_item(db, run_id, item.id)
+        judges_list = []
+        class_votes = []
+        rationale_votes = []
+        for j in js:
+            verdict = j.verdict or {}
+            class_ok = verdict.get("predicted_class_correct")
+            rubric = verdict.get("rubric", {})
+            manual = verdict.get("manual", {})
+            jud = {
+                "judge_id": j.judge_model,
+                "class_ok": class_ok,
+                "rationale_ok_by_rubric": {k: (leaf or {}).get("pass") for k, leaf in rubric.items()},
+                "custom_ok": {k: (leaf or {}).get("pass") for k, leaf in manual.items()},
+            }
+            judges_list.append(jud)
+            if isinstance(class_ok, bool):
+                class_votes.append(class_ok)
+            rv = list(jud["rationale_ok_by_rubric"].values())
+            if rv:
+                rationale_votes.append(sum(1 for v in rv if v) / len(rv))
+
+        consensus = {
+            "class_ok_ratio": (sum(class_votes) / len(class_votes)) if class_votes else None,
+            "rationale_pass_ratio": (sum(rationale_votes) / len(rationale_votes)) if rationale_votes else None,
+        }
+
+        if consensus["class_ok_ratio"] is not None:
+            class_ok_total += 1 if consensus["class_ok_ratio"] >= 0.5 else 0
+        if consensus["rationale_pass_ratio"] is not None:
+            rationale_pass_total += 1 if consensus["rationale_pass_ratio"] >= 0.5 else 0
+
+        rec = EvalLabRecord(
+            job_id=req.job_id,
+            sid=item.item_id,
+            sentence=item.sentence,
+            gold_class=item.gold_label,
+            pred_class=item.predicted_label,
+            rationale=item.rationale,
+            judges_json={"judges": judges_list},
+            consensus_json=consensus,
+        )
+        db.add(rec)
+        finished += 1
+
+    job.total = total
+    job.finished = finished
+    job.finished_at = datetime.now(timezone.utc)
+    job.metrics_summary = {
+        "class_accuracy": (class_ok_total / total) if total else 0.0,
+        "rationale_pass_rate": (rationale_pass_total / total) if total else 0.0,
+    }
+    db.add(job)
+    db.commit()
+
     return {"job_id": req.job_id, "total": job.total, "started_at": job.started_at}
 
 
@@ -114,6 +234,17 @@ def job_status(job_id: str, db: Session = Depends(get_db)):
         "custom_metrics": job.custom_metrics,
         "metrics_summary": job.metrics_summary or {},
     }
+
+
+def _normalize_label(val: Optional[str]) -> Optional[str]:
+    if val is None:
+        return None
+    t = str(val).strip().lower()
+    if t in {"ambiguous", "amb", "a"}:
+        return "Ambiguous"
+    if t in {"unambiguous", "unamb", "u"}:
+        return "Unambiguous"
+    return None
 
 
 @router.get("/jobs/{job_id}/records", response_model=EvalRecordsPage)
@@ -152,11 +283,13 @@ def list_records(
             if ids and j.get("judge_id") not in ids:
                 continue
             jlist.append(j)
+        pred_norm = _normalize_label(r.pred_class) or "Ambiguous"
+        gold_norm = _normalize_label(r.gold_class)
         items.append({
             "id": r.sid,
             "sentence": r.sentence,
-            "gold_class": r.gold_class,
-            "pred_class": r.pred_class,
+            "gold_class": gold_norm,
+            "pred_class": pred_norm,
             "rationale": r.rationale,
             "judges": jlist,
             "consensus": r.consensus_json or {},
