@@ -353,14 +353,24 @@ class PromptLabService:
         user_id: int,
         contract_id: Optional[int],
     ) -> List[ExplainResult]:
+        import logging
+        logger = logging.getLogger(__name__)
+        
         prompt = self._get_prompt(prompt_id, custom_prompt)
         model = self.get_current_model()
         out: List[ExplainResult] = []
+        total = len(sentences)
+        
+        logger.info(f"[PromptLab] Starting batch processing: {total} sentences, contract_id={contract_id}")
         
         BATCH_SIZE = 10
         for i in range(0, len(sentences), BATCH_SIZE):
             batch = sentences[i:i + BATCH_SIZE]
-            for s in batch:
+            batch_num = i // BATCH_SIZE + 1
+            total_batches = (total + BATCH_SIZE - 1) // BATCH_SIZE
+            logger.info(f"[PromptLab] Processing batch {batch_num}/{total_batches} ({i+1}-{min(i+BATCH_SIZE, total)}/{total})")
+            
+            for idx_in_batch, s in enumerate(batch):
                 try:
                     inf = self._run_inference(s, prompt)
                     sid = self._persist_result(db, user_id, contract_id, s, inf["label"], inf["rationale"], auto_commit=False)
@@ -375,7 +385,7 @@ class PromptLabService:
                         )
                     )
                 except Exception as e:
-                    print(f"[ERROR] Failed to process sentence: {str(e)[:200]}")
+                    logger.error(f"[PromptLab] Failed to process sentence {i+idx_in_batch+1}/{total}: {str(e)[:200]}")
                     out.append(
                         ExplainResult(
                             sentence=s,
@@ -389,8 +399,10 @@ class PromptLabService:
             
             try:
                 db.commit()
+                logger.info(f"[PromptLab] Batch {batch_num}/{total_batches} committed successfully")
             except Exception as e:
                 db.rollback()
-                print(f"[ERROR] Database commit failed: {str(e)[:200]}")
+                logger.error(f"[PromptLab] Database commit failed for batch {batch_num}: {str(e)[:200]}")
         
+        logger.info(f"[PromptLab] Batch processing completed: {len(out)} results")
         return out
