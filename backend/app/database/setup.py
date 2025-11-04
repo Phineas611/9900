@@ -8,19 +8,32 @@ from pathlib import Path
 # ==========================
 # Use SQLite database
 backend_dir = Path(__file__).parent.parent.parent
-db_dir = backend_dir / "data"
 
-# Create data directory if it doesn't exist
-try:
-    db_dir.mkdir(parents=True, exist_ok=True)
-    db_path = str(db_dir / "app.db")
-except (PermissionError, OSError):
-    # Fallback to /tmp if we can't write to project directory (e.g., Render read-only filesystem)
-    if os.path.exists("/tmp"):
-        db_path = "/tmp/app.db"
-    else:
-        # Last resort: use backend directory
-        db_path = str(backend_dir / "app.db")
+# Check for existing database files in order of preference
+old_db_path = backend_dir / "app.db"
+new_db_dir = backend_dir / "data"
+new_db_path = new_db_dir / "app.db"
+tmp_db_path = Path("/tmp/app.db")
+
+# Priority: old location > new location > /tmp
+if old_db_path.exists():
+    # Use existing database from old location
+    db_path = str(old_db_path)
+elif new_db_path.exists():
+    # Use existing database from new location
+    db_path = str(new_db_path)
+else:
+    # Create new database - try new location first
+    try:
+        new_db_dir.mkdir(parents=True, exist_ok=True)
+        db_path = str(new_db_path)
+    except (PermissionError, OSError):
+        # Fallback to /tmp if we can't write to project directory
+        if os.path.exists("/tmp"):
+            db_path = str(tmp_db_path)
+        else:
+            # Last resort: use backend directory
+            db_path = str(old_db_path)
 
 DATABASE_URL = f"sqlite:///{db_path}"
 
