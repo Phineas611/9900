@@ -1,4 +1,4 @@
-import io, uuid, time, json, os, logging
+import io, uuid, time, json, os, logging, re
 import asyncio
 import httpx
 from typing import Dict, Any, List, Tuple
@@ -102,7 +102,7 @@ class EvaluationService:
         for mid in ids:
             if mid.startswith("groq/llama-3.1-8b"):
                 out.append(GroqLlama31_8B_Judge())
-            elif mid.startswith("groq/llama-3.3-70b"):
+            elif mid.startswith("groq/llama-3.3-70b") and os.getenv("GROQ_DISABLE_70B", "0") != "1":
                 out.append(GroqLlama33_70B_Judge())
             elif mid.startswith("hf/prometheus-7b-v2.0"):
                 out.append(HFPrometheus2_7B_Judge())
@@ -151,6 +151,8 @@ class EvaluationService:
         prompt = build_batch_prompt(items, {k: True for k in dim_keys}, manual_metrics, require_json=require_json)
         schema = make_verdicts_schema(dim_keys, manual_metrics) if require_json else None
         headers = {"Authorization": f"Bearer {os.getenv('GROQ_API_KEY','')}"}
+        max_tokens = int(os.getenv("GROQ_MAX_TOKENS", "192"))
+        min_interval_ms = int(os.getenv("GROQ_MIN_INTERVAL_MS", "150"))
         req = {
             "model": model.split("/")[-1],
             "temperature": temperature,
@@ -158,6 +160,7 @@ class EvaluationService:
                 {"role": "system", "content": "You are a strict evaluation judge. Output ONLY JSON."},
                 {"role": "user", "content": prompt},
             ],
+            "max_tokens": max_tokens,
         }
         model_short = req["model"]
         if schema:
@@ -171,18 +174,75 @@ class EvaluationService:
         t0 = time.time()
         self._logger.info(f"GROQ batch request: model={req['model']}, items={len(items)}, require_json={require_json}")
         self._logger.info(f"GROQ response_format: {req.get('response_format')}")
-        async with sem:
-            resp = await client.post(self._groq_url, headers=headers, json=req, timeout=60)
-        self._logger.info(f"GROQ status_code={resp.status_code}")
+        # 令牌桶：按批次提示长度估算令牌占用，避免 TPM 撞限
         try:
-            self._logger.info(f"GROQ resp_text={resp.text[:400]}")
+            from app.integration.judges.rate_limit import estimate_tokens_from_text, acquire_capacity_async, get_async_sem
+            prompt_text = prompt
+            required_tokens = estimate_tokens_from_text(prompt_text, max_output=max_tokens, extra=64)
         except Exception:
-            pass
-        # If structured outputs return non-200, retry once with the same schema; still failing will be marked invalid
-        if resp.status_code != 200 and isinstance(req.get("response_format"), dict) and req["response_format"].get("type") == "json_schema":
-            self._logger.info("Retrying Groq request once due to non-200 status under json_schema")
+            required_tokens = max_tokens * 2
+        await acquire_capacity_async(req["model"], required_tokens)
+        # 重试与降级：429/5xx 退避；如使用 json_schema 且失败，降级到 json_object
+        max_retries = int(os.getenv("GROQ_MAX_RETRIES", "3"))
+        attempt = 0
+        degraded = False
+
+        async def _do_post():
+            async with get_async_sem(req["model"]):
+                await asyncio.sleep(min_interval_ms / 1000.0)
+                return await client.post(self._groq_url, headers=headers, json=req, timeout=60)
+
+        def _parse_retry_wait(resp) -> float:
+            ra = resp.headers.get("Retry-After")
+            if ra:
+                try:
+                    return float(ra)
+                except Exception:
+                    pass
+            try:
+                data = resp.json()
+                msg = (data.get("error") or {}).get("message") or ""
+            except Exception:
+                msg = getattr(resp, "text", "") or ""
+            m = re.search(r"try again in\s+(\d+(?:\.\d+)?)\s*ms", msg, re.IGNORECASE)
+            if m:
+                return float(m.group(1)) / 1000.0
+            m = re.search(r"try again in\s+(\d+(?:\.\d+)?)\s*s", msg, re.IGNORECASE)
+            if m:
+                return float(m.group(1))
+            return 0.5
+
+        resp = None
+        while attempt <= max_retries:
             async with sem:
-                resp = await client.post(self._groq_url, headers=headers, json=req, timeout=60)
+                resp = await _do_post()
+            self._logger.info(f"GROQ status_code={resp.status_code}")
+            try:
+                self._logger.info(f"GROQ resp_text={resp.text[:400]}")
+            except Exception:
+                pass
+
+            if resp.status_code == 200:
+                break
+
+            # 如使用 json_schema 并遇非 200，先降级到 json_object 再试
+            if isinstance(req.get("response_format"), dict) and req["response_format"].get("type") == "json_schema" and not degraded:
+                self._logger.info("Non-200 under json_schema; degrading to json_object and retrying")
+                req["response_format"] = {"type": "json_object"}
+                degraded = True
+                attempt += 1
+                continue
+
+            # 429/5xx 退避重试
+            if resp.status_code in (429, 500, 502, 503, 504):
+                base = _parse_retry_wait(resp)
+                backoff = min(max(base, 0.25), 2.0) * (1 + attempt * 0.5)
+                self._logger.info(f"GROQ backoff sleeping {backoff:.2f}s (attempt={attempt})")
+                await asyncio.sleep(backoff)
+                attempt += 1
+                continue
+            # 其他错误不重试
+            break
         # Parse provider response safely; fallback if schema/choices missing
         try:
             data = resp.json()
@@ -256,9 +316,12 @@ class EvaluationService:
         # Prepare inputs
         inputs = [{"sentence": it.sentence, "rationale": it.rationale} for it in batch_items]
 
-        # Run J1 & J2 concurrently (batch)
-        j1_task = self._groq_batch(j1_id, inputs, dim_keys, manual_metrics, req.temperature, req.require_json, client, judge_sem) if j1_id.startswith("groq/") else None
-        j2_task = self._groq_batch(j2_id, inputs, dim_keys, manual_metrics, req.temperature, req.require_json, client, judge_sem) if j2_id.startswith("groq/") else None
+        def _is_groq(mid: str) -> bool:
+            return mid.startswith("groq/") or mid.startswith("groq:")
+
+        # Run J1 & J2 concurrently (batch for Groq, sync for others)
+        j1_task = self._groq_batch(j1_id, inputs, dim_keys, manual_metrics, req.temperature, req.require_json, client, judge_sem) if _is_groq(j1_id) else None
+        j2_task = self._groq_batch(j2_id, inputs, dim_keys, manual_metrics, req.temperature, req.require_json, client, judge_sem) if _is_groq(j2_id) else None
 
         if j1_task is None or j2_task is None:
             # Fallback: build per-item prompt and use sync judge in thread
@@ -269,6 +332,11 @@ class EvaluationService:
                                             req.criteria, manual_metrics, lt, req.require_json))
             async def run_sync(judge_id: str, prompts: List[str]) -> Dict[str, Any]:
                 judges = self._make_judges([judge_id])
+                if not judges:
+                    self._logger.warning(f"[eval] No sync judge available for {judge_id}, skipping this branch.")
+                    # 返回与 prompts 等长的“空裁决”，防止上层聚合崩溃
+                    invalid = {"judge_label": None, "predicted_class_correct": None, "rubric": {}, "manual": {}}
+                    return {"latency_ms": 0.0, "provider_raw": {}, "verdicts": [invalid for _ in prompts]}
                 j = judges[0]
                 async def one(p):
                     return await asyncio.to_thread(j.judge, {"prompt": p, "temperature": req.temperature})
@@ -303,37 +371,79 @@ class EvaluationService:
             if l1 != l2:
                 conflicts_idx.append(idx)
 
-        # If conflicts exist and J3 configured
-        if conflicts_idx and j3_id:
-            conflict_items = [batch_items[i] for i in conflicts_idx]
-            conflict_inputs = [{"sentence": it.sentence, "rationale": it.rationale} for it in conflict_items]
-            if j3_id.startswith("groq/"):
-                j3_res = await self._groq_batch(j3_id, conflict_inputs, dim_keys, manual_metrics, req.temperature, req.require_json, client, judge_sem)
+        # If conflicts OR 强制第三评审（通过环境变量或请求字段）
+        always_use_j3 = (os.getenv("EVAL_ALWAYS_USE_J3", "0") == "1") or bool(getattr(req, "always_use_third", False))
+        if j3_id and (conflicts_idx or always_use_j3):
+            targets = batch_items if always_use_j3 else [batch_items[i] for i in conflicts_idx]
+            t_inputs = [{"sentence": it.sentence, "rationale": it.rationale} for it in targets]
+            if _is_groq(j3_id):
+                j3_res = await self._groq_batch(j3_id, t_inputs, dim_keys, manual_metrics, req.temperature, req.require_json, client, judge_sem)
                 j3_verdicts = [self._normalize_verdict(v, dim_keys, manual_metrics) for v in j3_res["verdicts"]]
-                for (i, it), v3 in zip([(i, batch_items[i]) for i in conflicts_idx], j3_verdicts):
+                idx_iter = range(len(batch_items)) if always_use_j3 else conflicts_idx
+                for i, v3 in zip(idx_iter, j3_verdicts):
+                    it = batch_items[i]
                     self.repo.add_judgment(db, run_id, it.id, j3_id, v3, j3_res["latency_ms"], j3_res.get("provider_raw", {}))
                     all_votes[i].append(v3["judge_label"])
             else:
-                # Fallback sync judge per conflict
+                # Fallback sync judge per conflict / 或全量（如果强制）
                 judges = self._make_judges([j3_id])
-                j3 = judges[0]
-                for i in conflicts_idx:
-                    it = batch_items[i]
-                    lt = language_tool_check(it.rationale)
-                    prompt = build_prompt({"sentence": it.sentence, "rationale": it.rationale}, req.criteria, manual_metrics, lt, req.require_json)
-                    res = await asyncio.to_thread(j3.judge, {"prompt": prompt, "temperature": req.temperature})
-                    try:
-                        data = json.loads(res["json"])
-                    except Exception:
-                        txt = res["json"]; s, e = txt.find("{"), txt.rfind("}")
-                        data = json.loads(txt[s:e+1]) if s != -1 and e != -1 else {"judge_label": "ambiguous", "rubric": {}, "manual": {}}
-                    v3 = self._normalize_verdict(data, dim_keys, manual_metrics)
-                    self.repo.add_judgment(db, run_id, it.id, j3_id, v3, res["latency_ms"], res.get("provider_raw", {}))
-                    all_votes[i].append(v3["judge_label"])
+                if not judges:
+                    self._logger.warning(f"[eval] No sync judge available for {j3_id}, skipping J3 sync branch.")
+                    # 补空裁决，避免后续 majority 计算崩溃
+                    idx_iter = range(len(batch_items)) if always_use_j3 else conflicts_idx
+                    for i in idx_iter:
+                        all_votes[i].append("ambiguous")
+                else:
+                    j3 = judges[0]
+                    idx_iter = range(len(batch_items)) if always_use_j3 else conflicts_idx
+                    for i in idx_iter:
+                        it = batch_items[i]
+                        lt = language_tool_check(it.rationale)
+                        prompt = build_prompt({"sentence": it.sentence, "rationale": it.rationale}, req.criteria, manual_metrics, lt, req.require_json)
+                        res = await asyncio.to_thread(j3.judge, {"prompt": prompt, "temperature": req.temperature})
+                        try:
+                            data = json.loads(res["json"])
+                        except Exception:
+                            txt = res["json"]; s, e = txt.find("{"), txt.rfind("}")
+                            data = json.loads(txt[s:e+1]) if s != -1 and e != -1 else {"judge_label": "ambiguous", "rubric": {}, "manual": {}}
+                        v3 = self._normalize_verdict(data, dim_keys, manual_metrics)
+                        self.repo.add_judgment(db, run_id, it.id, j3_id, v3, res["latency_ms"], res.get("provider_raw", {}))
+                        all_votes[i].append(v3["judge_label"])
 
         return all_votes, anchor_priors
 
     async def assess_async(self, db: Session, user_id: int, req: AssessRequest) -> Dict[str, Any]:
+        # 统一归一化 judge 模型别名，避免分流判断失败
+        alias = {
+            # 前端占位符映射到真实模型；支持环境变量覆盖
+            "judge-mini-a": os.getenv("JUDGE_MINI_A_MODEL", "groq/llama-3.1-8b-instant"),
+            "judge-mini-b": os.getenv("JUDGE_MINI_B_MODEL", "hf/prometheus-7b-v2.0"),
+            "judge-mini-c": os.getenv("JUDGE_PRO_MODEL", "groq/llama-3.3-70b-versatile"),
+            # 常见写法归一化
+            "groq_llama31_8b": "groq/llama-3.1-8b-instant",
+            "groq_llama33_70b": "groq/llama-3.3-70b-versatile",
+            "llama-3.1-8b": "groq/llama-3.1-8b-instant",
+            "llama-3.3-70b": "groq/llama-3.3-70b-versatile",
+        }
+        if getattr(req, "judge_models", None):
+            req.judge_models = [alias.get(m.strip(), m.strip()) for m in req.judge_models]
+            # 过滤未知 ID，并自动补齐到 3 个（Groq 走批量；HF Prometheus 走同步）
+            def _is_groq(mid: str) -> bool:
+                return mid.startswith("groq/") or mid.startswith("groq:")
+            SUPPORTED_SYNC = {"hf/prometheus-7b-v2.0"}
+            final = [m for m in req.judge_models if _is_groq(m) or m in SUPPORTED_SYNC]
+            defaults = [
+                os.getenv("JUDGE_MINI_A_MODEL", "groq/llama-3.1-8b-instant"),
+                "hf/prometheus-7b-v2.0",
+                os.getenv("JUDGE_PRO_MODEL", "groq/llama-3.3-70b-versatile"),
+            ]
+            for d in defaults:
+                if len(final) >= 3:
+                    break
+                if d not in final and (_is_groq(d) or d in SUPPORTED_SYNC):
+                    final.append(d)
+            req.judge_models = final
+            self._logger.info(f"judge_models(finalized)={req.judge_models}")
         run = self.repo.get_run(db, req.run_id)
         if not run:
             raise ValueError("run not found")
