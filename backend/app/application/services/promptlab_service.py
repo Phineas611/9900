@@ -115,7 +115,6 @@ class PromptLabService:
                 "HF_API_TOKEN is not set in environment. "
                 "Please set it in Render Dashboard > Environment Variables."
             )
-        # 有的版本叫 token，有的文档叫 api_key；token 在各版本都可用
         return InferenceClient(token=hf_token, timeout=90)
 
     def _run_remote_model(self, model_id: str, text: str) -> Optional[Dict[str, Any]]:
@@ -247,6 +246,7 @@ class PromptLabService:
         sentence: str,
         label: str,
         rationale: str,
+        auto_commit: bool = True,
     ) -> Optional[int]:
         if not contract_id:
             return None
@@ -288,8 +288,9 @@ class PromptLabService:
         row.updated_at = datetime.now(timezone.utc)
 
         db.add(row)
-        db.commit()
-        db.refresh(row)
+        if auto_commit:
+            db.commit()
+            db.refresh(row)
         return row.id
 
     # ---------- public ----------
@@ -352,16 +353,44 @@ class PromptLabService:
         user_id: int,
         contract_id: Optional[int],
     ) -> List[ExplainResult]:
+        prompt = self._get_prompt(prompt_id, custom_prompt)
+        model = self.get_current_model()
         out: List[ExplainResult] = []
-        for s in sentences:
-            out.append(
-                self.explain_one(
-                    sentence=s,
-                    prompt_id=prompt_id,
-                    custom_prompt=custom_prompt,
-                    db=db,
-                    user_id=user_id,
-                    contract_id=contract_id,
-                )
-            )
+        
+        BATCH_SIZE = 10
+        for i in range(0, len(sentences), BATCH_SIZE):
+            batch = sentences[i:i + BATCH_SIZE]
+            for s in batch:
+                try:
+                    inf = self._run_inference(s, prompt)
+                    sid = self._persist_result(db, user_id, contract_id, s, inf["label"], inf["rationale"], auto_commit=False)
+                    out.append(
+                        ExplainResult(
+                            sentence=s,
+                            label=inf["label"],
+                            rationale=inf["rationale"],
+                            model_id=model["id"],
+                            contract_id=contract_id,
+                            sentence_id=sid,
+                        )
+                    )
+                except Exception as e:
+                    print(f"[ERROR] Failed to process sentence: {str(e)[:200]}")
+                    out.append(
+                        ExplainResult(
+                            sentence=s,
+                            label="ERROR",
+                            rationale=f"Processing error: {str(e)[:200]}",
+                            model_id=model["id"],
+                            contract_id=contract_id,
+                            sentence_id=None,
+                        )
+                    )
+            
+            try:
+                db.commit()
+            except Exception as e:
+                db.rollback()
+                print(f"[ERROR] Database commit failed: {str(e)[:200]}")
+        
         return out
