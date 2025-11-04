@@ -166,7 +166,7 @@ class PromptLabService:
                 last_err = f"status={status} body={(body[:300]).replace(chr(10),' ')}"
                 print(f"[HF][attempt {attempt}] {last_err}")
                 # Retry on rate limit (429), service unavailable (503), and bad gateway (502)
-                if status in (429, 502, 503):
+                if status in (429, 502, 503,500):
                     continue
                 break  
             except Exception as e:
