@@ -304,8 +304,9 @@ def import_contract_sentences(
 
 
         # Update or insert sentences - preserve existing analysis data
+        # Use (page, sentence_id) as key to match unique constraint (contract_id, page, sentence_id)
         existing_sentences = {
-            (cs.page, cs.sentence_id, cs.sentence): cs
+            (cs.page, cs.sentence_id): cs
             for cs in db.query(ContractSentence).filter(
                 ContractSentence.contract_id == contract_id
             ).all()
@@ -317,14 +318,17 @@ def import_contract_sentences(
             sentence_id = int(row.get("sentence_id")) if not pd.isna(row.get("sentence_id")) else None
             sentence = str(row.get("sentence") or "")
             
-            # Check if sentence already exists
-            key = (page, sentence_id, sentence)
+            # Check if sentence already exists by (page, sentence_id) to match unique constraint
+            key = (page, sentence_id)
             if key in existing_sentences:
                 # Update existing record - only update basic fields, preserve analysis data
                 existing = existing_sentences[key]
                 existing.job_id = job_id  # Update job_id
                 existing.file_name = str(row.get("file_name") or contract.file_name or existing.file_name)
                 existing.file_type = str(row.get("file_type") or contract.file_type or existing.file_type)
+                # Update sentence text if provided
+                if sentence:
+                    existing.sentence = sentence
                 # Keep existing label, is_ambiguous, explanation, clarity_score, etc.
             else:
                 # Create new record

@@ -3,27 +3,16 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from typing import List, Tuple, Optional
 from datetime import datetime
-import os
 
 
 class AnalyticsRepository:
     
     @staticmethod
-    def _format_date_column(column: str) -> str:
-        """Format date column for month extraction (compatible with SQLite and PostgreSQL)"""
-        db_url = os.getenv("DATABASE_URL", "sqlite:///./app.db")
-        if db_url.startswith("postgresql"):
-            return f"to_char({column}, 'YYYY-MM')"
-        else:
-            return f"strftime('%Y-%m', {column})"
-    
-    @staticmethod
     def get_monthly_data(db: Session, start_date: datetime) -> List[Tuple[str, int, float]]:
         """Get monthly contract count and ambiguity rate - only count analyzed sentences"""
-        month_expr = AnalyticsRepository._format_date_column("cs.created_at")
-        query = text(f"""
+        query = text("""
             SELECT 
-                {month_expr} AS month,
+                strftime('%Y-%m', cs.created_at) AS month,
                 COUNT(DISTINCT cs.contract_id) AS contracts,
                 COALESCE(
                     ROUND(100.0 * SUM(CASE WHEN cs.is_ambiguous = 1 OR cs.is_ambiguous IS TRUE THEN 1 ELSE 0 END) / NULLIF(COUNT(cs.id), 0), 2),
@@ -34,7 +23,7 @@ class AnalyticsRepository:
             WHERE cs.created_at >= :start_date
               AND c.processing_status = 'completed'
               AND cs.is_ambiguous IS NOT NULL
-            GROUP BY {month_expr}
+            GROUP BY strftime('%Y-%m', cs.created_at)
             ORDER BY month ASC
         """)
         return db.execute(query, {"start_date": start_date}).fetchall()
@@ -42,17 +31,16 @@ class AnalyticsRepository:
     @staticmethod
     def get_quality_scores(db: Session, start_date: datetime) -> List[Tuple[str, float]]:
         """Get quality scores (clarity) by month - use sentence creation date for grouping"""
-        month_expr = AnalyticsRepository._format_date_column("cs.created_at")
-        query = text(f"""
+        query = text("""
             SELECT 
-                {month_expr} AS month,
+                strftime('%Y-%m', cs.created_at) AS month,
                 ROUND(AVG(cs.clarity_score), 2) AS score
             FROM contract_sentences cs
             JOIN contracts c ON c.id = cs.contract_id
             WHERE (c.created_at >= :start_date OR cs.created_at >= :start_date)
               AND c.processing_status = 'completed'
               AND cs.clarity_score IS NOT NULL
-            GROUP BY {month_expr}
+            GROUP BY strftime('%Y-%m', cs.created_at)
             ORDER BY month ASC
         """)
         return db.execute(query, {"start_date": start_date}).fetchall()
@@ -194,10 +182,9 @@ class AnalyticsRepository:
     @staticmethod
     def get_completeness_scores(db: Session, start_date: datetime) -> List[Tuple[str, float]]:
         """Calculate completeness scores by month"""
-        month_expr = AnalyticsRepository._format_date_column("cs.created_at")
-        query = text(f"""
+        query = text("""
             SELECT 
-                {month_expr} AS month,
+                strftime('%Y-%m', cs.created_at) AS month,
                 ROUND(
                     (
                         (SUM(CASE WHEN cs.explanation IS NOT NULL THEN 1 ELSE 0 END) * 4.0 +
@@ -210,7 +197,7 @@ class AnalyticsRepository:
             JOIN contracts c ON c.id = cs.contract_id
             WHERE c.processing_status = 'completed'
               AND cs.created_at >= :start_date
-            GROUP BY {month_expr}
+            GROUP BY strftime('%Y-%m', cs.created_at)
             ORDER BY month ASC
         """)
         return db.execute(query, {"start_date": start_date}).fetchall()
@@ -218,10 +205,9 @@ class AnalyticsRepository:
     @staticmethod
     def get_accuracy_scores(db: Session, start_date: datetime) -> List[Tuple[str, float]]:
         """Calculate accuracy scores by month based on label coverage"""
-        month_expr = AnalyticsRepository._format_date_column("cs.created_at")
-        query = text(f"""
+        query = text("""
             SELECT 
-                {month_expr} AS month,
+                strftime('%Y-%m', cs.created_at) AS month,
                 ROUND(
                     (1.0 - (COUNT(CASE WHEN cs.label IS NULL THEN 1 END) / NULLIF(COUNT(cs.id), 0))) * 10, 2
                 ) AS accuracy_score
@@ -229,7 +215,7 @@ class AnalyticsRepository:
             JOIN contracts c ON c.id = cs.contract_id
             WHERE c.processing_status = 'completed'
               AND cs.created_at >= :start_date
-            GROUP BY {month_expr}
+            GROUP BY strftime('%Y-%m', cs.created_at)
             ORDER BY month ASC
         """)
         return db.execute(query, {"start_date": start_date}).fetchall()
@@ -237,17 +223,16 @@ class AnalyticsRepository:
     @staticmethod
     def get_consistency_scores(db: Session, start_date: datetime) -> List[Tuple[str, float]]:
         """Calculate consistency scores by month based on ambiguity rate stability"""
-        month_expr = AnalyticsRepository._format_date_column("cs.created_at")
-        query = text(f"""
+        query = text("""
             WITH monthly_rates AS (
                 SELECT 
-                    {month_expr} AS month,
+                    strftime('%Y-%m', cs.created_at) AS month,
                     ROUND(100.0 * SUM(CASE WHEN cs.is_ambiguous = 1 OR cs.is_ambiguous IS TRUE THEN 1 ELSE 0 END) / NULLIF(COUNT(cs.id), 0), 2) AS ambiguity_rate
                 FROM contract_sentences cs
                 JOIN contracts c ON c.id = cs.contract_id
                 WHERE c.processing_status = 'completed'
                   AND cs.created_at >= :start_date
-                GROUP BY {month_expr}
+                GROUP BY strftime('%Y-%m', cs.created_at)
             ),
             ranked_rates AS (
                 SELECT 
