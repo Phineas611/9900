@@ -51,3 +51,16 @@ class ExplainResult(BaseModel):
     model_id: str
     contract_id: Optional[int] = None
     sentence_id: Optional[int] = None
+
+
+class TaskResponse(BaseModel):
+    task_id: str
+    status: str
+    message: str
+
+
+class TaskStatusResponse(BaseModel):
+    task_id: str
+    status: str  # pending, processing, completed, failed
+    progress: Optional[dict] = None  # {"current": 10, "total": 100}
+    message: Optional[str] = None

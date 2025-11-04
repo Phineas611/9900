@@ -1,6 +1,6 @@
 import os
 import re
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Callable
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 
@@ -352,6 +352,7 @@ class PromptLabService:
         db: Session,
         user_id: int,
         contract_id: Optional[int],
+        progress_callback: Optional[Callable[[int, int], None]] = None,
     ) -> List[ExplainResult]:
         import logging
         logger = logging.getLogger(__name__)
@@ -400,6 +401,10 @@ class PromptLabService:
             try:
                 db.commit()
                 logger.info(f"[PromptLab] Batch {batch_num}/{total_batches} committed successfully")
+                
+                if progress_callback:
+                    progress_callback(i + len(batch), total)
+                    
             except Exception as e:
                 db.rollback()
                 logger.error(f"[PromptLab] Database commit failed for batch {batch_num}: {str(e)[:200]}")
