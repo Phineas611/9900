@@ -33,6 +33,7 @@ from app.application.services.promptlab_service import PromptLabService
 
 router = APIRouter(prefix="/promptlab", tags=["promptlab"])
 service = PromptLabService()
+logger = logging.getLogger(__name__)
 
 _tasks: Dict[str, Dict[str, Any]] = {}
 _tasks_lock = threading.Lock()
@@ -41,10 +42,14 @@ _tasks_lock = threading.Lock()
 @router.get("/models")
 def list_models():
     """Return available models and the current selection."""
-    return {
-        "available": service.list_models(),
-        "current": service.get_current_model(),
-    }
+    try:
+        return {
+            "available": service.list_models(),
+            "current": service.get_current_model(),
+        }
+    except Exception as e:
+        logger.error(f"Error in list_models: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to list models: {str(e)}")
 
 
 @router.post("/models/switch")

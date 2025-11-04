@@ -11,17 +11,19 @@ logger = logging.getLogger(__name__)
 
 backend_dir = Path(__file__).parent.parent.parent
 
-# Priority order for database path:
-# 1. Environment variable (if set)
-# 2. backend/app.db (always use this location)
+
 
 # Check environment variable first
 if os.getenv("DATABASE_PATH"):
     db_path = os.getenv("DATABASE_PATH")
     logger.info(f"Using database path from environment variable: {db_path}")
 else:
-    # Always use backend/app.db
+    # Fallback for local development
     db_path = str(backend_dir / "app.db")
+    logger.warning(
+        f"DATABASE_PATH not set! Using project directory: {db_path}\n"
+        f"This will be RESET on Render deployments. Set DATABASE_PATH for persistence!"
+    )
     if Path(db_path).exists():
         logger.info(f"Using existing database: {db_path}")
     else:
