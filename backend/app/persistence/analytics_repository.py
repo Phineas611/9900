@@ -98,31 +98,43 @@ class AnalyticsRepository:
     ) -> List[Tuple]:
         """Get paginated contracts list with statistics"""
         query = text(f"""
-            SELECT 
-                c.id,
-                c.file_name AS name,
-                c.created_at AS date,
-                c.file_type AS type,
-                COALESCE(aj.total_sentences, 0) AS sentences,
-                COALESCE(
-                    (SELECT ROUND(100.0 * SUM(CASE WHEN cs2.is_ambiguous = 1 OR cs2.is_ambiguous IS TRUE THEN 1 ELSE 0 END) / NULLIF(COUNT(cs2.id), 0), 2)
-                     FROM contract_sentences cs2
-                     WHERE cs2.contract_id = c.id),
-                    0
-                ) AS ambiguity_rate,
-                COALESCE(
-                    (SELECT ROUND(AVG(cs3.clarity_score), 2)
-                     FROM contract_sentences cs3
-                     WHERE cs3.contract_id = c.id AND cs3.clarity_score IS NOT NULL),
-                    aj.avg_explanation_clarity,
-                    0.0
-                ) AS quality_score
-            FROM contracts c
-            LEFT JOIN analysis_jobs aj ON aj.contract_id = c.id AND aj.status = 'COMPLETED'
-            WHERE {where_clause}
-            ORDER BY c.created_at DESC
-            LIMIT :limit OFFSET :offset
-        """)
+        SELECT 
+            c.id,
+            c.file_name AS name,
+            c.created_at AS date,
+            c.file_type AS type,
+            COALESCE(
+                (SELECT aj.total_sentences 
+                 FROM analysis_jobs aj 
+                 WHERE aj.contract_id = c.id 
+                   AND aj.status = 'COMPLETED'
+                 ORDER BY aj.finished_at DESC 
+                 LIMIT 1), 
+                0
+            ) AS sentences,
+            COALESCE(
+                (SELECT ROUND(100.0 * SUM(CASE WHEN cs2.is_ambiguous = 1 OR cs2.is_ambiguous IS TRUE THEN 1 ELSE 0 END) / NULLIF(COUNT(cs2.id), 0), 2)
+                 FROM contract_sentences cs2
+                 WHERE cs2.contract_id = c.id),
+                0
+            ) AS ambiguity_rate,
+            COALESCE(
+                (SELECT ROUND(AVG(cs3.clarity_score), 2)
+                 FROM contract_sentences cs3
+                 WHERE cs3.contract_id = c.id AND cs3.clarity_score IS NOT NULL),
+                (SELECT aj.avg_explanation_clarity
+                 FROM analysis_jobs aj 
+                 WHERE aj.contract_id = c.id 
+                   AND aj.status = 'COMPLETED'
+                 ORDER BY aj.finished_at DESC 
+                 LIMIT 1),
+                0.0
+            ) AS quality_score
+        FROM contracts c
+        WHERE {where_clause}
+        ORDER BY c.created_at DESC
+        LIMIT :limit OFFSET :offset
+    """)
         return db.execute(query, {**params, "limit": limit, "offset": offset}).fetchall()
     
     @staticmethod
