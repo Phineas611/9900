@@ -178,16 +178,29 @@ def get_recent_uploads(limit: int = 20, db: Session = Depends(get_db)):
     try:
         query = text("""
             SELECT 
-              aj.id       AS job_id, 
-              c.id        AS contract_id, 
-              aj.file_name, 
-              aj.file_type, 
-              aj.uploaded_at, 
-              aj.status, 
-              COALESCE(aj.total_sentences, 0) AS total_sentences 
-            FROM analysis_jobs aj 
-            JOIN contracts c ON c.id = aj.contract_id 
-            ORDER BY aj.uploaded_at DESC 
+              (SELECT aj.id 
+               FROM analysis_jobs aj 
+               WHERE aj.contract_id = c.id 
+                 AND aj.status = 'COMPLETED'
+               ORDER BY aj.finished_at DESC 
+               LIMIT 1) AS job_id,
+              c.id AS contract_id,
+              c.file_name,
+              c.file_type,
+              c.created_at AS uploaded_at,
+              c.processing_status AS status,
+              COALESCE(
+                  (SELECT aj.total_sentences 
+                   FROM analysis_jobs aj 
+                   WHERE aj.contract_id = c.id 
+                     AND aj.status = 'COMPLETED'
+                   ORDER BY aj.finished_at DESC 
+                   LIMIT 1),
+                  0
+              ) AS total_sentences
+            FROM contracts c
+            WHERE c.processing_status IN ('completed', 'processing', 'pending')
+            ORDER BY c.created_at DESC
             LIMIT :limit
         """)
         result = db.execute(query, {"limit": limit}).fetchall()
