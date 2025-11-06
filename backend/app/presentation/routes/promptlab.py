@@ -19,6 +19,8 @@ import threading
 from datetime import datetime
 
 from app.database.setup import get_db
+from app.application.auth import get_current_user
+from app.database.models.activity_log import ActivityLog
 from app.application.models.promptlab import (
     ModelSwitchRequest,
     ClassifyRequest,
@@ -135,6 +137,7 @@ def _process_file_async(
     custom_prompt: Optional[str],
     contract_id: Optional[int],
     out: str,
+    user_id: int,
 ):
     """Background task function for processing file"""
     logger = logging.getLogger(__name__)
@@ -158,7 +161,7 @@ def _process_file_async(
                 prompt_id=prompt_id,
                 custom_prompt=custom_prompt,
                 db=db,
-                user_id=0,
+                user_id=user_id,
                 contract_id=contract_id,
                 progress_callback=update_progress,
             )
@@ -208,6 +211,26 @@ def _process_file_async(
                 _tasks[task_id]["message"] = f"Successfully processed {len(sentences)} sentences"
                 _tasks[task_id]["completed_at"] = datetime.now().isoformat()
             
+            # Create activity log for analysis completion
+            try:
+                from app.persistence.contract_repository import get_contract_by_id
+                contract_name = "file"
+                if contract_id:
+                    contract = get_contract_by_id(db, contract_id, user_id)
+                    if contract:
+                        contract_name = contract.file_name or contract.title or "contract"
+                
+                activity_log = ActivityLog(
+                    user_id=user_id,
+                    event_type="ANALYSIS",
+                    title="Prompt Analysis Completed",
+                    message=f"Analysis completed for {len(sentences)} sentences from '{contract_name}'"
+                )
+                db.add(activity_log)
+                db.commit()
+            except Exception as e:
+                logger.warning(f"Failed to create activity log: {e}")
+            
             logger.info(f"[Task {task_id}] Completed successfully")
             
         finally:
@@ -231,6 +254,7 @@ async def explain_file(
     out: str = Query(default="csv", regex="^(csv|xlsx)$"),
     background_tasks: BackgroundTasks = BackgroundTasks(),
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """
     Async file processing: accepts CSV/Excel file, returns task ID.
@@ -301,6 +325,7 @@ async def explain_file(
         custom_prompt=custom_prompt,
         contract_id=contract_id,
         out=out,
+        user_id=current_user.id,
     )
     
     logger.info(f"Created task {task_id} for {len(sentences)} sentences")

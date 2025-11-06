@@ -220,7 +220,7 @@ def get_recent_uploads(
                   0
               ) AS total_sentences
             FROM contracts c
-            WHERE c.processing_status IN ('completed', 'processing', 'pending')
+            WHERE c.processing_status IN ('completed', 'processing', 'pending', 'failed')
               AND c.user_id = :user_id
               AND c.is_active = True
             ORDER BY c.created_at DESC
@@ -292,17 +292,26 @@ def import_contract_sentences(
     current_user = Depends(get_current_user)
 ):
     try:
-
+        # Verify contract belongs to current user
         contract = get_contract_by_id(db, contract_id, current_user.id)
         if not contract:
             raise HTTPException(status_code=404, detail="Contract not found")
 
-
-        backend_dir = Path(__file__).resolve().parents[3]
-        output_root = backend_dir / "outputs" / str(current_user.id) / str(contract_id)
+        # Use persistent disk if OUTPUT_DIR is set, otherwise use backend/outputs
+        import os
+        if os.getenv("OUTPUT_DIR"):
+            output_base = Path(os.getenv("OUTPUT_DIR"))
+        else:
+            backend_dir = Path(__file__).resolve().parents[3]
+            output_base = backend_dir / "outputs"
+        
+        output_root = output_base / str(current_user.id) / str(contract_id)
 
         if not output_root.exists():
-            raise HTTPException(status_code=404, detail="Output directory not found")
+            raise HTTPException(
+                status_code=404, 
+                detail=f"Output directory not found: {output_root}. The sentences file may have been deleted or the contract processing may not have completed."
+            )
 
 
         csv_path = None
@@ -362,10 +371,14 @@ def import_contract_sentences(
         }
         
         objs = []
+        updated_count = 0
         for _, row in df.iterrows():
             page = int(row.get("page")) if not pd.isna(row.get("page")) else None
             sentence_id = int(row.get("sentence_id")) if not pd.isna(row.get("sentence_id")) else None
             sentence = str(row.get("sentence") or "")
+            
+            # IMPORTANT: Always use contract_id from URL parameter, not from CSV
+            # CSV may contain wrong contract_id from previous imports
             
             # Check if sentence already exists by (page, sentence_id) to match unique constraint
             key = (page, sentence_id)
@@ -379,17 +392,18 @@ def import_contract_sentences(
                 if sentence:
                     existing.sentence = sentence
                 # Keep existing label, is_ambiguous, explanation, clarity_score, etc.
+                updated_count += 1
             else:
-                # Create new record
+                # Create new record - always use contract_id from URL parameter
                 objs.append(ContractSentence(
                     job_id=job_id,
-                    contract_id=contract_id,
+                    contract_id=contract_id,  # Always use from URL parameter, not CSV
                     file_name=str(row.get("file_name") or contract.file_name or ""),
                     file_type=str(row.get("file_type") or contract.file_type or ""),
                     page=page,
                     sentence_id=sentence_id,
-                    section=None,
-                    subsection=None,
+                    section=str(row.get("section")) if "section" in df.columns and not pd.isna(row.get("section")) else None,
+                    subsection=str(row.get("subsection")) if "subsection" in df.columns and not pd.isna(row.get("subsection")) else None,
                     sentence=sentence,
                     sentence_vec=None,
                     label=None,
@@ -404,9 +418,11 @@ def import_contract_sentences(
         db.commit()
 
         return {
-            "contract_id": contract_id,
+            "contract_id": contract_id,  # Always return the contract_id from URL parameter
             "job_id": job_id,
             "imported_count": len(objs),
+            "updated_count": updated_count,
+            "total_sentences": len(df),
             "csv_path": str(csv_path)
         }
     except HTTPException:
