@@ -33,7 +33,10 @@ from app.database import models
 from legal_analytics_api.app.routers.analytics import router as la_analytics_router
 from legal_analytics_api.app.routers.dashboard import router as la_dashboard_router
 
-SECRET_KEY = "123456"
+# Use environment variable for SECRET_KEY (same as security.py)
+# This ensures session middleware uses the same key as token signing
+import os
+SECRET_KEY = os.getenv("SECRET_KEY", "123456")
 
 app = FastAPI(title="Legal Contract Analyzer API", version="1.0.0")
 
