@@ -86,11 +86,18 @@ class UploadService:
         contract = create_contract(db, contract_data, user_id)
         
 
-        upload_dir = Path("uploads") / str(user_id)
+        # Use persistent disk if UPLOAD_DIR is set (for Render), otherwise use uploads/
+        if os.getenv("UPLOAD_DIR"):
+            upload_base = Path(os.getenv("UPLOAD_DIR"))
+        else:
+            upload_base = Path("uploads")
+        upload_dir = upload_base / str(user_id)
         
         try:
 
             file_path = UploadService.save_uploaded_file(file, upload_dir)
+            # Convert to absolute path to ensure persistence across restarts
+            file_path_absolute = file_path.resolve()
 
             update_contract_file_info(
                 db=db,
@@ -99,7 +106,7 @@ class UploadService:
                 file_name=file.filename,
                 file_type=Path(file.filename).suffix.lower(),
                 file_size=file.size if hasattr(file, 'size') else 0,
-                file_path=str(file_path)
+                file_path=str(file_path_absolute)
             )
             
 
@@ -123,7 +130,7 @@ class UploadService:
             BackgroundProcessor.process_contract_async(
                 contract_id=contract.id,
                 user_id=user_id,
-                file_path=str(file_path),
+                file_path=str(file_path_absolute),
                 file_type=Path(file.filename).suffix.lower()
             )
             

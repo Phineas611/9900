@@ -1,4 +1,5 @@
 # backend/app/persistence/security.py
+import os
 import secrets
 import hashlib
 import time
@@ -25,7 +26,9 @@ def verify_password(password: str, stored: str) -> bool:
     calc = _pbkdf2(password, salt)
     return secrets.compare_digest(calc, correct)
 
-SECRET_KEY = "123456"
+# Use environment variable for SECRET_KEY to ensure persistence across restarts
+# If not set, use a default (not recommended for production)
+SECRET_KEY = os.getenv("SECRET_KEY", "123456")
 SIGNER = URLSafeSerializer(SECRET_KEY, salt="session")
 
 def sign_session(user_id: int, expire_seconds: int = 86400) -> str:
