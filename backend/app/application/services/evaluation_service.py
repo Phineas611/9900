@@ -308,110 +308,79 @@ class EvaluationService:
     async def _judge_two_then_maybe_third_batch(self, db: Session, run_id: str, batch_items: List[Any],
                                                 req: AssessRequest, dim_keys: List[str], manual_metrics: List[str],
                                                 client: httpx.AsyncClient, judge_sem: asyncio.Semaphore) -> Tuple[List[List[str]], List[str | None]]:
-        # J1, J2, J3 from req
+        # 三位评委同时判（若少于三位则退化为两位）
         j1_id = req.judge_models[0]
         j2_id = req.judge_models[1] if len(req.judge_models) > 1 else req.judge_models[0]
         j3_id = req.judge_models[2] if len(req.judge_models) > 2 else None
 
-        # Prepare inputs
         inputs = [{"sentence": it.sentence, "rationale": it.rationale} for it in batch_items]
 
         def _is_groq(mid: str) -> bool:
             return mid.startswith("groq/") or mid.startswith("groq:")
 
-        # Run J1 & J2 concurrently (batch for Groq, sync for others)
-        j1_task = self._groq_batch(j1_id, inputs, dim_keys, manual_metrics, req.temperature, req.require_json, client, judge_sem) if _is_groq(j1_id) else None
-        j2_task = self._groq_batch(j2_id, inputs, dim_keys, manual_metrics, req.temperature, req.require_json, client, judge_sem) if _is_groq(j2_id) else None
-
-        if j1_task is None or j2_task is None:
-            # Fallback: build per-item prompt and use sync judge in thread
+        # 为同步评委准备逐条 prompt（Groq 走批量）
+        prompts: List[str] = []
+        if True:
             prompts = []
             for it in batch_items:
                 lt = language_tool_check(it.rationale)
                 prompts.append(build_prompt({"sentence": it.sentence, "rationale": it.rationale},
                                             req.criteria, manual_metrics, lt, req.require_json))
-            async def run_sync(judge_id: str, prompts: List[str]) -> Dict[str, Any]:
-                judges = self._make_judges([judge_id])
-                if not judges:
-                    self._logger.warning(f"[eval] No sync judge available for {judge_id}, skipping this branch.")
-                    # 返回与 prompts 等长的“空裁决”，防止上层聚合崩溃
-                    invalid = {"judge_label": None, "predicted_class_correct": None, "rubric": {}, "manual": {}}
-                    return {"latency_ms": 0.0, "provider_raw": {}, "verdicts": [invalid for _ in prompts]}
-                j = judges[0]
-                async def one(p):
-                    return await asyncio.to_thread(j.judge, {"prompt": p, "temperature": req.temperature})
-                t0 = time.time()
-                outs = [await one(p) for p in prompts]
-                return {"latency_ms": (time.time()-t0)*1000, "provider_raw": {}, "verdicts": [json.loads(o["json"]) for o in outs]}
-            j1_task = run_sync(j1_id, prompts) if j1_task is None else j1_task
-            j2_task = run_sync(j2_id, prompts) if j2_task is None else j2_task
 
-        j1_res, j2_res = await asyncio.gather(j1_task, j2_task)
+        async def run_sync(judge_id: str, prompts: List[str]) -> Dict[str, Any]:
+            judges = self._make_judges([judge_id])
+            if not judges:
+                self._logger.warning(f"[eval] No sync judge available for {judge_id}, skipping.")
+                invalid = {"judge_label": None, "predicted_class_correct": None, "rubric": {}, "manual": {}}
+                return {"latency_ms": 0.0, "provider_raw": {}, "verdicts": [invalid for _ in prompts]}
+            j = judges[0]
+            async def one(p):
+                return await asyncio.to_thread(j.judge, {"prompt": p, "temperature": req.temperature})
+            t0 = time.time()
+            outs = [await one(p) for p in prompts]
+            return {"latency_ms": (time.time()-t0)*1000, "provider_raw": {}, "verdicts": [json.loads(o["json"]) for o in outs]}
+
+        # 启动三位评委任务（Groq 批量；非 Groq 同步回退）
+        j1_task = self._groq_batch(j1_id, inputs, dim_keys, manual_metrics, req.temperature, req.require_json, client, judge_sem) if _is_groq(j1_id) else run_sync(j1_id, prompts)
+        j2_task = self._groq_batch(j2_id, inputs, dim_keys, manual_metrics, req.temperature, req.require_json, client, judge_sem) if _is_groq(j2_id) else run_sync(j2_id, prompts)
+        j3_task = None
+        if j3_id:
+            j3_task = self._groq_batch(j3_id, inputs, dim_keys, manual_metrics, req.temperature, req.require_json, client, judge_sem) if _is_groq(j3_id) else run_sync(j3_id, prompts)
+
+        # 并发收集所有结果
+        if j3_task:
+            j1_res, j2_res, j3_res = await asyncio.gather(j1_task, j2_task, j3_task)
+        else:
+            j1_res, j2_res = await asyncio.gather(j1_task, j2_task)
+            j3_res = None
+
+        # 归一化所有裁决
         j1_verdicts = [self._normalize_verdict(v, dim_keys, manual_metrics) for v in j1_res["verdicts"]]
         j2_verdicts = [self._normalize_verdict(v, dim_keys, manual_metrics) for v in j2_res["verdicts"]]
+        j3_verdicts = ([self._normalize_verdict(v, dim_keys, manual_metrics) for v in j3_res["verdicts"]] if j3_res else [])
 
-        # Save J1, J2 judgments
+        # 落库三位评委裁决
         for it, v1, v2 in zip(batch_items, j1_verdicts, j2_verdicts):
             self.repo.add_judgment(db, run_id, it.id, j1_id, v1, j1_res["latency_ms"], j1_res.get("provider_raw", {}))
             self.repo.add_judgment(db, run_id, it.id, j2_id, v2, j2_res["latency_ms"], j2_res.get("provider_raw", {}))
+        if j3_id and j3_verdicts:
+            for it, v3 in zip(batch_items, j3_verdicts):
+                self.repo.add_judgment(db, run_id, it.id, j3_id, v3, (j3_res or {}).get("latency_ms", 0.0), (j3_res or {}).get("provider_raw", {}))
 
-        # Early-stop vs conflicts
+        # 汇总三位评委的类别投票与 anchors
         all_votes: List[List[str]] = []
         anchor_priors: List[str | None] = []
-        conflicts_idx: List[int] = []
         for idx, it in enumerate(batch_items):
-            # anchor prior
-            text_for_anchor = f"{it.sentence} {it.rationale}"
-            prior = match_anchor(text_for_anchor, self._anchor_patterns)
+            prior = match_anchor(f"{it.sentence} {it.rationale}", self._anchor_patterns)
             anchor_priors.append(prior)
-
             l1 = j1_verdicts[idx]["judge_label"]
             l2 = j2_verdicts[idx]["judge_label"]
-            all_votes.append([l1, l2])
-            if l1 != l2:
-                conflicts_idx.append(idx)
-
-        # If conflicts OR 强制第三评审（通过环境变量或请求字段）
-        always_use_j3 = (os.getenv("EVAL_ALWAYS_USE_J3", "0") == "1") or bool(getattr(req, "always_use_third", False))
-        if j3_id and (conflicts_idx or always_use_j3):
-            targets = batch_items if always_use_j3 else [batch_items[i] for i in conflicts_idx]
-            t_inputs = [{"sentence": it.sentence, "rationale": it.rationale} for it in targets]
-            if _is_groq(j3_id):
-                j3_res = await self._groq_batch(j3_id, t_inputs, dim_keys, manual_metrics, req.temperature, req.require_json, client, judge_sem)
-                j3_verdicts = [self._normalize_verdict(v, dim_keys, manual_metrics) for v in j3_res["verdicts"]]
-                idx_iter = range(len(batch_items)) if always_use_j3 else conflicts_idx
-                for i, v3 in zip(idx_iter, j3_verdicts):
-                    it = batch_items[i]
-                    self.repo.add_judgment(db, run_id, it.id, j3_id, v3, j3_res["latency_ms"], j3_res.get("provider_raw", {}))
-                    all_votes[i].append(v3["judge_label"])
-            else:
-                # Fallback sync judge per conflict / 或全量（如果强制）
-                judges = self._make_judges([j3_id])
-                if not judges:
-                    self._logger.warning(f"[eval] No sync judge available for {j3_id}, skipping J3 sync branch.")
-                    # 补空裁决，避免后续 majority 计算崩溃
-                    idx_iter = range(len(batch_items)) if always_use_j3 else conflicts_idx
-                    for i in idx_iter:
-                        all_votes[i].append("ambiguous")
-                else:
-                    j3 = judges[0]
-                    idx_iter = range(len(batch_items)) if always_use_j3 else conflicts_idx
-                    for i in idx_iter:
-                        it = batch_items[i]
-                        lt = language_tool_check(it.rationale)
-                        prompt = build_prompt({"sentence": it.sentence, "rationale": it.rationale}, req.criteria, manual_metrics, lt, req.require_json)
-                        res = await asyncio.to_thread(j3.judge, {"prompt": prompt, "temperature": req.temperature})
-                        try:
-                            data = json.loads(res["json"])
-                        except Exception:
-                            txt = res["json"]; s, e = txt.find("{"), txt.rfind("}")
-                            data = json.loads(txt[s:e+1]) if s != -1 and e != -1 else {"judge_label": "ambiguous", "rubric": {}, "manual": {}}
-                        v3 = self._normalize_verdict(data, dim_keys, manual_metrics)
-                        self.repo.add_judgment(db, run_id, it.id, j3_id, v3, res["latency_ms"], res.get("provider_raw", {}))
-                        all_votes[i].append(v3["judge_label"])
+            row = [l1, l2]
+            if j3_id and j3_verdicts:
+                row.append(j3_verdicts[idx]["judge_label"])
+            all_votes.append(row)
 
         return all_votes, anchor_priors
-
     async def assess_async(self, db: Session, user_id: int, req: AssessRequest) -> Dict[str, Any]:
         # 统一归一化 judge 模型别名，避免分流判断失败
         alias = {

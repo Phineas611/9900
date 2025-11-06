@@ -57,6 +57,18 @@ def _build_assess_request(run_id: str, req: EvalRunRequest, rows_count: int) -> 
     )
 
 
+def _norm_class_lower(val: Optional[str]) -> Optional[str]:
+    """Normalize class label to 'ambiguous'/'unambiguous' or None."""
+    if val is None:
+        return None
+    t = str(val).strip().lower()
+    if t.startswith("amb"):
+        return "ambiguous"
+    if t.startswith("unamb"):
+        return "unambiguous"
+    return None
+
+
 async def _run_in_background(job_id: str, run_id: str, assess_req: AssessRequest):
     """Execute assessment asynchronously, then materialize EvalLabRecord and update job status."""
     db = SessionLocal()
@@ -91,6 +103,17 @@ async def _run_in_background(job_id: str, run_id: str, assess_req: AssessRequest
             for j in js:
                 verdict = j.verdict or {}
                 class_ok = verdict.get("predicted_class_correct")
+                # Fallback: if class_ok missing, derive by gold vs pred; otherwise use judge label versus pred
+                if not isinstance(class_ok, bool):
+                    pred_norm = _norm_class_lower(getattr(item, "predicted_label", None))
+                    gold_norm = _norm_class_lower(getattr(item, "gold_label", None))
+                    judge_norm = _norm_class_lower(verdict.get("judge_label"))
+                    if gold_norm is not None and pred_norm is not None:
+                        class_ok = (pred_norm == gold_norm)
+                    elif judge_norm is not None and pred_norm is not None:
+                        class_ok = (judge_norm == pred_norm)
+                    else:
+                        class_ok = None
                 rubric = verdict.get("rubric", {})
                 manual = verdict.get("manual", {})
                 jud = {
@@ -206,11 +229,13 @@ async def run_evaluation(req: EvalRunRequest, db: Session = Depends(get_db), res
     if not job:
         raise HTTPException(status_code=404, detail="job not found")
 
+    # 读取原文件并映射列
     try:
         df, cols = load_table(job.file_path)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to parse file: {e}")
 
+    # 创建 EvaluationService 运行并批量插入条目
     repo = EvaluationRepository()
     svc = EvaluationService(repo)
     run_id = uuid.uuid4().hex
@@ -240,6 +265,7 @@ async def run_evaluation(req: EvalRunRequest, db: Session = Depends(get_db), res
         rows.append(row)
     repo.bulk_insert_items(db, run_id, rows)
 
+    # 评审配置映射 + 作业元数据预写入
     assess_req = _build_assess_request(run_id, req, len(rows))
     from datetime import datetime, timezone
     job.started_at = datetime.now(timezone.utc)
