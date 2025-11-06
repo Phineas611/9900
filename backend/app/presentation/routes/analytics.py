@@ -21,7 +21,10 @@ from app.application.models.analytics import (
 router = APIRouter()
 
 @router.get("/analytics/kpi")
-def get_kpi_analytics(db: Session = Depends(get_db)):
+def get_kpi_analytics(
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
     try:
         # Define windows for trend calculation: last 30 days vs previous 30 days
         now = datetime.now(timezone.utc)
@@ -52,10 +55,12 @@ def get_kpi_analytics(db: Session = Depends(get_db)):
             SELECT COUNT(*) FROM contracts
             WHERE processing_status = 'completed'
               AND processed_at IS NOT NULL
+              AND user_id = :user_id
+              AND is_active = True
               AND processed_at BETWEEN :start AND :end
             """
         )
-        total_contracts_cur = db.execute(total_contracts_query_cur, {"start": cur_start, "end": now}).scalar_one_or_none() or 0
+        total_contracts_cur = db.execute(total_contracts_query_cur, {"start": cur_start, "end": now, "user_id": current_user.id}).scalar_one_or_none() or 0
 
         # Contracts processed (previous window)
         total_contracts_query_prev = text(
@@ -63,10 +68,12 @@ def get_kpi_analytics(db: Session = Depends(get_db)):
             SELECT COUNT(*) FROM contracts
             WHERE processing_status = 'completed'
               AND processed_at IS NOT NULL
+              AND user_id = :user_id
+              AND is_active = True
               AND processed_at BETWEEN :start AND :end
             """
         )
-        total_contracts_prev = db.execute(total_contracts_query_prev, {"start": prev_start, "end": prev_end}).scalar_one_or_none() or 0
+        total_contracts_prev = db.execute(total_contracts_query_prev, {"start": prev_start, "end": prev_end, "user_id": current_user.id}).scalar_one_or_none() or 0
 
         # Sentences and ambiguous counts — aggregate from contract_sentences per contracts
         sentences_query_cur = text(
@@ -76,10 +83,12 @@ def get_kpi_analytics(db: Session = Depends(get_db)):
             FROM contract_sentences cs
             JOIN contracts c ON c.id = cs.contract_id
             WHERE c.processing_status = 'completed'
+              AND c.user_id = :user_id
+              AND c.is_active = True
               AND cs.created_at BETWEEN :start AND :end
             """
         )
-        s_cur_row = db.execute(sentences_query_cur, {"start": cur_start, "end": now}).first()
+        s_cur_row = db.execute(sentences_query_cur, {"start": cur_start, "end": now, "user_id": current_user.id}).first()
         total_sentences_cur = (s_cur_row[0] if s_cur_row and s_cur_row[0] is not None else 0)
         ambiguous_sentences_cur = (s_cur_row[1] if s_cur_row and s_cur_row[1] is not None else 0)
 
@@ -90,10 +99,12 @@ def get_kpi_analytics(db: Session = Depends(get_db)):
             FROM contract_sentences cs
             JOIN contracts c ON c.id = cs.contract_id
             WHERE c.processing_status = 'completed'
+              AND c.user_id = :user_id
+              AND c.is_active = True
               AND cs.created_at BETWEEN :start AND :end
             """
         )
-        s_prev_row = db.execute(sentences_query_prev, {"start": prev_start, "end": prev_end}).first()
+        s_prev_row = db.execute(sentences_query_prev, {"start": prev_start, "end": prev_end, "user_id": current_user.id}).first()
         total_sentences_prev = (s_prev_row[0] if s_prev_row and s_prev_row[0] is not None else 0)
         ambiguous_sentences_prev = (s_prev_row[1] if s_prev_row and s_prev_row[1] is not None else 0)
 
@@ -104,11 +115,13 @@ def get_kpi_analytics(db: Session = Depends(get_db)):
             FROM contract_sentences cs
             JOIN contracts c ON c.id = cs.contract_id
             WHERE c.processing_status = 'completed'
+              AND c.user_id = :user_id
+              AND c.is_active = True
               AND cs.clarity_score IS NOT NULL
               AND cs.created_at BETWEEN :start AND :end
             """
         )
-        avg_explanation_clarity_cur = db.execute(avg_clarity_query_cur, {"start": cur_start, "end": now}).scalar_one_or_none() or 0.0
+        avg_explanation_clarity_cur = db.execute(avg_clarity_query_cur, {"start": cur_start, "end": now, "user_id": current_user.id}).scalar_one_or_none() or 0.0
 
         avg_clarity_query_prev = text(
             """
@@ -116,11 +129,13 @@ def get_kpi_analytics(db: Session = Depends(get_db)):
             FROM contract_sentences cs
             JOIN contracts c ON c.id = cs.contract_id
             WHERE c.processing_status = 'completed'
+              AND c.user_id = :user_id
+              AND c.is_active = True
               AND cs.clarity_score IS NOT NULL
               AND cs.created_at BETWEEN :start AND :end
             """
         )
-        avg_explanation_clarity_prev = db.execute(avg_clarity_query_prev, {"start": prev_start, "end": prev_end}).scalar_one_or_none() or 0.0
+        avg_explanation_clarity_prev = db.execute(avg_clarity_query_prev, {"start": prev_start, "end": prev_end, "user_id": current_user.id}).scalar_one_or_none() or 0.0
 
         # Average analysis time seconds — completed jobs in windows
         avg_time_query_cur = text(
@@ -128,24 +143,26 @@ def get_kpi_analytics(db: Session = Depends(get_db)):
             SELECT ROUND(AVG(duration_seconds), 1)
             FROM analysis_jobs
             WHERE status='COMPLETED'
+              AND user_id = :user_id
               AND duration_seconds IS NOT NULL
               AND finished_at IS NOT NULL
               AND finished_at BETWEEN :start AND :end
             """
         )
-        avg_analysis_time_sec_cur = db.execute(avg_time_query_cur, {"start": cur_start, "end": now}).scalar_one_or_none() or 0.0
+        avg_analysis_time_sec_cur = db.execute(avg_time_query_cur, {"start": cur_start, "end": now, "user_id": current_user.id}).scalar_one_or_none() or 0.0
 
         avg_time_query_prev = text(
             """
             SELECT ROUND(AVG(duration_seconds), 1)
             FROM analysis_jobs
             WHERE status='COMPLETED'
+              AND user_id = :user_id
               AND duration_seconds IS NOT NULL
               AND finished_at IS NOT NULL
               AND finished_at BETWEEN :start AND :end
             """
         )
-        avg_analysis_time_sec_prev = db.execute(avg_time_query_prev, {"start": prev_start, "end": prev_end}).scalar_one_or_none() or 0.0
+        avg_analysis_time_sec_prev = db.execute(avg_time_query_prev, {"start": prev_start, "end": prev_end, "user_id": current_user.id}).scalar_one_or_none() or 0.0
 
         return {
             # current window values (original keys kept for backward compatibility)
@@ -174,7 +191,11 @@ def get_kpi_analytics(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/uploads/recent")
-def get_recent_uploads(limit: int = 20, db: Session = Depends(get_db)):
+def get_recent_uploads(
+    limit: int = 20, 
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)  # 添加这行
+):
     try:
         query = text("""
             SELECT 
@@ -200,10 +221,12 @@ def get_recent_uploads(limit: int = 20, db: Session = Depends(get_db)):
               ) AS total_sentences
             FROM contracts c
             WHERE c.processing_status IN ('completed', 'processing', 'pending')
+              AND c.user_id = :user_id
+              AND c.is_active = True
             ORDER BY c.created_at DESC
             LIMIT :limit
         """)
-        result = db.execute(query, {"limit": limit}).fetchall()
+        result = db.execute(query, {"limit": limit, "user_id": current_user.id}).fetchall()
 
         uploads = [dict(row._mapping) for row in result]
         return uploads
@@ -215,9 +238,15 @@ def get_contract_sentences(
     contract_id: int, 
     limit: int = 100, 
     offset: int = 0, 
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     try:
+        # Verify contract belongs to current user
+        contract = get_contract_by_id(db, contract_id, current_user.id)
+        if not contract:
+            raise HTTPException(status_code=404, detail="Contract not found")
+        
         query = text("""
             SELECT page, sentence_id, sentence, label, is_ambiguous, clarity_score, section, subsection 
             FROM contract_sentences 
@@ -229,19 +258,26 @@ def get_contract_sentences(
 
         sentences = [dict(row._mapping) for row in result]
         return sentences
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/activity/recent")
-def get_recent_activity(limit: int = 20, db: Session = Depends(get_db)):
+def get_recent_activity(
+    limit: int = 20, 
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
     try:
         query = text("""
             SELECT id, user_id, event_type, title, message, created_at
             FROM activity_logs
+            WHERE user_id = :user_id
             ORDER BY created_at DESC
             LIMIT :limit
         """)
-        result = db.execute(query, {"limit": limit}).fetchall()
+        result = db.execute(query, {"limit": limit, "user_id": current_user.id}).fetchall()
 
         activities = [dict(row._mapping) for row in result]
         return activities
@@ -380,7 +416,8 @@ def import_contract_sentences(
 @router.get("/charts/trends", response_model=TrendChartResponse)
 def get_trends_chart(
     range: str = Query("3months", description="Time range: 1month, 3months, 6months, 1year"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """Get trend chart data"""
     try:
@@ -392,7 +429,7 @@ def get_trends_chart(
         }
         days = days_map.get(range, 90)
         
-        data = AnalyticsService.get_trends_chart_data(db, days)
+        data = AnalyticsService.get_trends_chart_data(db, days, current_user.id)
         return TrendChartResponse(data=data)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -401,11 +438,12 @@ def get_trends_chart(
 @router.get("/phrases/recurring", response_model=RecurringPhrasesResponse)
 def get_recurring_phrases(
     limit: int = Query(20, ge=1, le=100),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """Get recurring ambiguous phrases"""
     try:
-        data = AnalyticsService.get_recurring_phrases_data(db, limit)
+        data = AnalyticsService.get_recurring_phrases_data(db, limit, current_user.id)
         return RecurringPhrasesResponse(data=data)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -418,29 +456,39 @@ def get_contracts(
     search: str = Query(""),
     type: str = Query(""),
     status: str = Query(""),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)  
 ):
     """Get contracts list with filters and pagination"""
     try:
-        return AnalyticsService.get_contracts_list(db, page, limit, search, type, status)
+        return AnalyticsService.get_contracts_list(
+            db, page, limit, search, type, status, current_user.id  
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/contracts/stats", response_model=ContractStatsResponse)
-def get_contract_stats(db: Session = Depends(get_db)):
+def get_contract_stats(
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
     """Get contract statistics"""
     try:
-        return AnalyticsService.get_contract_stats(db)
+        return AnalyticsService.get_contract_stats(db, current_user.id)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/extract/{job_id}", response_model=ExtractedSentencesResponse)
-def get_extracted_sentences(job_id: str, db: Session = Depends(get_db)):
+def get_extracted_sentences(
+    job_id: str, 
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
     """Get extracted sentences for a job"""
     try:
-        return AnalyticsService.get_extracted_sentences(db, job_id)
+        return AnalyticsService.get_extracted_sentences(db, job_id, current_user.id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
@@ -461,7 +509,7 @@ def get_reports_data(
         }
         days = days_map.get(range, 180)
         
-        data = AnalyticsService.get_reports_data(db, days)
+        data = AnalyticsService.get_reports_data(db, days, current_user.id)
         return data
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -474,7 +522,7 @@ def export_report(
 ):
     """Export comprehensive analysis report"""
     try:
-        buffer = AnalyticsService.export_report(db, request.format)
+        buffer = AnalyticsService.export_report(db, request.format, current_user.id)
         
         timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
         

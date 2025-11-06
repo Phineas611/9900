@@ -8,7 +8,7 @@ from datetime import datetime
 class AnalyticsRepository:
     
     @staticmethod
-    def get_monthly_data(db: Session, start_date: datetime) -> List[Tuple[str, int, float]]:
+    def get_monthly_data(db: Session, start_date: datetime, user_id: int) -> List[Tuple[str, int, float]]:
         """Get monthly contract count and ambiguity rate - only count analyzed sentences"""
         query = text("""
             SELECT 
@@ -22,14 +22,16 @@ class AnalyticsRepository:
             JOIN contracts c ON c.id = cs.contract_id
             WHERE cs.created_at >= :start_date
               AND c.processing_status = 'completed'
+              AND c.user_id = :user_id
+              AND c.is_active = True
               AND cs.is_ambiguous IS NOT NULL
             GROUP BY strftime('%Y-%m', cs.created_at)
             ORDER BY month ASC
         """)
-        return db.execute(query, {"start_date": start_date}).fetchall()
+        return db.execute(query, {"start_date": start_date, "user_id": user_id}).fetchall()
     
     @staticmethod
-    def get_quality_scores(db: Session, start_date: datetime) -> List[Tuple[str, float]]:
+    def get_quality_scores(db: Session, start_date: datetime, user_id: int) -> List[Tuple[str, float]]:
         """Get quality scores (clarity) by month - use sentence creation date for grouping"""
         query = text("""
             SELECT 
@@ -39,14 +41,16 @@ class AnalyticsRepository:
             JOIN contracts c ON c.id = cs.contract_id
             WHERE (c.created_at >= :start_date OR cs.created_at >= :start_date)
               AND c.processing_status = 'completed'
+              AND c.user_id = :user_id
+              AND c.is_active = True
               AND cs.clarity_score IS NOT NULL
             GROUP BY strftime('%Y-%m', cs.created_at)
             ORDER BY month ASC
         """)
-        return db.execute(query, {"start_date": start_date}).fetchall()
+        return db.execute(query, {"start_date": start_date, "user_id": user_id}).fetchall()
     
     @staticmethod
-    def get_contract_types(db: Session, start_date: datetime) -> List[Tuple[str, int, float]]:
+    def get_contract_types(db: Session, start_date: datetime, user_id: int) -> List[Tuple[str, int, float]]:
         """Get contract statistics grouped by file type"""
         query = text("""
             SELECT 
@@ -60,27 +64,32 @@ class AnalyticsRepository:
             LEFT JOIN contract_sentences cs ON cs.contract_id = c.id
             WHERE c.created_at >= :start_date
               AND c.processing_status = 'completed'
+              AND c.user_id = :user_id
+              AND c.is_active = True
             GROUP BY c.file_type
             ORDER BY value DESC
         """)
-        return db.execute(query, {"start_date": start_date}).fetchall()
+        return db.execute(query, {"start_date": start_date, "user_id": user_id}).fetchall()
     
     @staticmethod
-    def get_recurring_sentences(db: Session, limit: int) -> List[Tuple[str, int]]:
+    def get_recurring_sentences(db: Session, limit: int, user_id: int) -> List[Tuple[str, int]]:
         """Get recurring ambiguous sentences"""
         query = text("""
             SELECT 
-                sentence,
+                cs.sentence,
                 COUNT(*) AS frequency
-            FROM contract_sentences
-            WHERE is_ambiguous = 1 OR is_ambiguous IS TRUE
-              AND sentence IS NOT NULL
-            GROUP BY sentence
+            FROM contract_sentences cs
+            JOIN contracts c ON c.id = cs.contract_id
+            WHERE (cs.is_ambiguous = 1 OR cs.is_ambiguous IS TRUE)
+              AND cs.sentence IS NOT NULL
+              AND c.user_id = :user_id
+              AND c.is_active = True
+            GROUP BY cs.sentence
             HAVING COUNT(*) > 1
             ORDER BY frequency DESC
             LIMIT :limit
         """)
-        return db.execute(query, {"limit": limit}).fetchall()
+        return db.execute(query, {"limit": limit, "user_id": user_id}).fetchall()
     
     @staticmethod
     def get_contracts_count(db: Session, where_clause: str, params: dict) -> int:
@@ -138,7 +147,7 @@ class AnalyticsRepository:
         return db.execute(query, {**params, "limit": limit, "offset": offset}).fetchall()
     
     @staticmethod
-    def get_stats_current_window(db: Session, start: datetime, end: datetime) -> Tuple[int, int, float, float]:
+    def get_stats_current_window(db: Session, start: datetime, end: datetime, user_id: int) -> Tuple[int, int, float, float]:
         """Get statistics for current time window - only count analyzed sentences"""
         query = text("""
             SELECT 
@@ -152,9 +161,11 @@ class AnalyticsRepository:
             FROM contracts c
             LEFT JOIN contract_sentences cs ON cs.contract_id = c.id AND cs.is_ambiguous IS NOT NULL
             WHERE c.processing_status = 'completed'
+              AND c.user_id = :user_id
+              AND c.is_active = True
               AND ((c.created_at >= :start AND c.created_at <= :end) OR (cs.created_at >= :start AND cs.created_at <= :end))
         """)
-        row = db.execute(query, {"start": start, "end": end}).first()
+        row = db.execute(query, {"start": start, "end": end, "user_id": user_id}).first()
         return (
             row[0] if row and row[0] else 0,
             row[1] if row and row[1] else 0,
@@ -163,14 +174,15 @@ class AnalyticsRepository:
         )
     
     @staticmethod
-    def get_job_info(db: Session, job_id: str) -> Optional[Tuple[str, int]]:
+    def get_job_info(db: Session, job_id: str, user_id: int) -> Optional[Tuple[str, int]]:
         """Get job file name and contract id"""
         query = text("""
             SELECT aj.file_name, aj.contract_id
             FROM analysis_jobs aj
             WHERE aj.id = :job_id
+              AND aj.user_id = :user_id
         """)
-        row = db.execute(query, {"job_id": job_id}).first()
+        row = db.execute(query, {"job_id": job_id, "user_id": user_id}).first()
         return row if row else None
     
     @staticmethod
@@ -192,7 +204,7 @@ class AnalyticsRepository:
         return db.execute(query, {"job_id": job_id}).fetchall()
     
     @staticmethod
-    def get_completeness_scores(db: Session, start_date: datetime) -> List[Tuple[str, float]]:
+    def get_completeness_scores(db: Session, start_date: datetime, user_id: int) -> List[Tuple[str, float]]:
         """Calculate completeness scores by month"""
         query = text("""
             SELECT 
@@ -208,14 +220,16 @@ class AnalyticsRepository:
             FROM contract_sentences cs
             JOIN contracts c ON c.id = cs.contract_id
             WHERE c.processing_status = 'completed'
+              AND c.user_id = :user_id
+              AND c.is_active = True
               AND cs.created_at >= :start_date
             GROUP BY strftime('%Y-%m', cs.created_at)
             ORDER BY month ASC
         """)
-        return db.execute(query, {"start_date": start_date}).fetchall()
+        return db.execute(query, {"start_date": start_date, "user_id": user_id}).fetchall()
     
     @staticmethod
-    def get_accuracy_scores(db: Session, start_date: datetime) -> List[Tuple[str, float]]:
+    def get_accuracy_scores(db: Session, start_date: datetime, user_id: int) -> List[Tuple[str, float]]:
         """Calculate accuracy scores by month based on label coverage"""
         query = text("""
             SELECT 
@@ -226,14 +240,16 @@ class AnalyticsRepository:
             FROM contract_sentences cs
             JOIN contracts c ON c.id = cs.contract_id
             WHERE c.processing_status = 'completed'
+              AND c.user_id = :user_id
+              AND c.is_active = True
               AND cs.created_at >= :start_date
             GROUP BY strftime('%Y-%m', cs.created_at)
             ORDER BY month ASC
         """)
-        return db.execute(query, {"start_date": start_date}).fetchall()
+        return db.execute(query, {"start_date": start_date, "user_id": user_id}).fetchall()
     
     @staticmethod
-    def get_consistency_scores(db: Session, start_date: datetime) -> List[Tuple[str, float]]:
+    def get_consistency_scores(db: Session, start_date: datetime, user_id: int) -> List[Tuple[str, float]]:
         """Calculate consistency scores by month based on ambiguity rate stability"""
         query = text("""
             WITH monthly_rates AS (
@@ -243,6 +259,8 @@ class AnalyticsRepository:
                 FROM contract_sentences cs
                 JOIN contracts c ON c.id = cs.contract_id
                 WHERE c.processing_status = 'completed'
+                  AND c.user_id = :user_id
+                  AND c.is_active = True
                   AND cs.created_at >= :start_date
                 GROUP BY strftime('%Y-%m', cs.created_at)
             ),
@@ -263,10 +281,10 @@ class AnalyticsRepository:
             FROM ranked_rates
             ORDER BY month ASC
         """)
-        return db.execute(query, {"start_date": start_date}).fetchall()
+        return db.execute(query, {"start_date": start_date, "user_id": user_id}).fetchall()
     
     @staticmethod
-    def get_contracts_for_reports(db: Session, start_date: datetime) -> List[Tuple]:
+    def get_contracts_for_reports(db: Session, start_date: datetime, user_id: int) -> List[Tuple]:
         """Get contract analysis data for reports"""
         query = text("""
             SELECT 
@@ -279,9 +297,11 @@ class AnalyticsRepository:
             FROM contracts c
             LEFT JOIN contract_sentences cs ON cs.contract_id = c.id
             WHERE c.processing_status = 'completed'
+              AND c.user_id = :user_id
+              AND c.is_active = True
               AND c.created_at >= :start_date
             GROUP BY c.file_name, c.created_at
             ORDER BY c.created_at DESC
             LIMIT 10
         """)
-        return db.execute(query, {"start_date": start_date}).fetchall()
+        return db.execute(query, {"start_date": start_date, "user_id": user_id}).fetchall()

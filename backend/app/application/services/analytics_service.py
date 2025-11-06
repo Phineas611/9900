@@ -18,14 +18,14 @@ from app.application.models.analytics import QualityData, AmbiguityTrend, Contra
 class AnalyticsService:
     
     @staticmethod
-    def get_trends_chart_data(db: Session, range_days: int) -> TrendChartData:
+    def get_trends_chart_data(db: Session, range_days: int, user_id: int) -> TrendChartData:
         """Get trend chart data"""
         start_date = datetime.now(timezone.utc) - timedelta(days=range_days)
         
         # Get data from repository
-        monthly_rows = AnalyticsRepository.get_monthly_data(db, start_date)
-        quality_rows = AnalyticsRepository.get_quality_scores(db, start_date)
-        types_rows = AnalyticsRepository.get_contract_types(db, start_date)
+        monthly_rows = AnalyticsRepository.get_monthly_data(db, start_date, user_id)
+        quality_rows = AnalyticsRepository.get_quality_scores(db, start_date, user_id)
+        types_rows = AnalyticsRepository.get_contract_types(db, start_date, user_id)
         
         # Transform to models
         monthly_data = [
@@ -56,9 +56,9 @@ class AnalyticsService:
         )
     
     @staticmethod
-    def get_recurring_phrases_data(db: Session, limit: int) -> RecurringPhrasesData:
+    def get_recurring_phrases_data(db: Session, limit: int, user_id: int) -> RecurringPhrasesData:
         """Get recurring ambiguous phrases"""
-        phrases_rows = AnalyticsRepository.get_recurring_sentences(db, limit)
+        phrases_rows = AnalyticsRepository.get_recurring_sentences(db, limit, user_id)
         
         # Calculate max frequency for normalization
         max_freq = max([row[1] for row in phrases_rows], default=0) if phrases_rows else 0
@@ -93,12 +93,17 @@ class AnalyticsService:
         limit: int,
         search: str,
         file_type: str,
-        status: str
+        status: str,
+        user_id: int  # 添加这行
     ) -> ContractsListResponse:
         """Get contracts list with filters and pagination"""
         # Build WHERE clause
-        where_conditions = ["c.processing_status = 'completed'"]
-        params = {}
+        where_conditions = [
+            "c.processing_status = 'completed'",
+            "c.user_id = :user_id",        # 添加这行
+            "c.is_active = True"           # 添加这行
+        ]
+        params = {"user_id": user_id}      # 添加这行
         
         if search:
             where_conditions.append("(c.title LIKE :search OR c.file_name LIKE :search)")
@@ -154,7 +159,7 @@ class AnalyticsService:
         return ContractsListResponse(items=items, total=total)
     
     @staticmethod
-    def get_contract_stats(db: Session) -> ContractStatsResponse:
+    def get_contract_stats(db: Session, user_id: int) -> ContractStatsResponse:
         """Get contract statistics"""
         now = datetime.now(timezone.utc)
         cur_start = now - timedelta(days=30)
@@ -163,11 +168,11 @@ class AnalyticsService:
         
         # Get current window stats
         cur_contracts, cur_sentences, cur_amb_rate, cur_quality = \
-            AnalyticsRepository.get_stats_current_window(db, cur_start, now)
+            AnalyticsRepository.get_stats_current_window(db, cur_start, now, user_id)
         
         # Get previous window stats
         prev_contracts, prev_sentences, prev_amb_rate, prev_quality = \
-            AnalyticsRepository.get_stats_current_window(db, prev_start, prev_end)
+            AnalyticsRepository.get_stats_current_window(db, prev_start, prev_end, user_id)
         
         # Calculate percentage change
         def pct_change(current, previous):
@@ -187,9 +192,9 @@ class AnalyticsService:
         )
     
     @staticmethod
-    def get_extracted_sentences(db: Session, job_id: str) -> ExtractedSentencesResponse:
+    def get_extracted_sentences(db: Session, job_id: str, user_id: int) -> ExtractedSentencesResponse:
         """Get extracted sentences for a job"""
-        job_info = AnalyticsRepository.get_job_info(db, job_id)
+        job_info = AnalyticsRepository.get_job_info(db, job_id, user_id)
         if not job_info:
             raise ValueError("Job not found")
         
@@ -221,17 +226,17 @@ class AnalyticsService:
         return ExtractedSentencesResponse(sentences=sentences)
     
     @staticmethod
-    def get_reports_data(db: Session, range_days: int) -> ReportsData:
+    def get_reports_data(db: Session, range_days: int, user_id: int) -> ReportsData:
         """Get complete reports data including all quality metrics"""
         start_date = datetime.now(timezone.utc) - timedelta(days=range_days)
         
         # Get all data from repository
-        monthly_rows = AnalyticsRepository.get_monthly_data(db, start_date)
-        quality_rows = AnalyticsRepository.get_quality_scores(db, start_date)
-        completeness_rows = AnalyticsRepository.get_completeness_scores(db, start_date)
-        accuracy_rows = AnalyticsRepository.get_accuracy_scores(db, start_date)
-        consistency_rows = AnalyticsRepository.get_consistency_scores(db, start_date)
-        contracts_rows = AnalyticsRepository.get_contracts_for_reports(db, start_date)
+        monthly_rows = AnalyticsRepository.get_monthly_data(db, start_date, user_id)
+        quality_rows = AnalyticsRepository.get_quality_scores(db, start_date, user_id)
+        completeness_rows = AnalyticsRepository.get_completeness_scores(db, start_date, user_id)
+        accuracy_rows = AnalyticsRepository.get_accuracy_scores(db, start_date, user_id)
+        consistency_rows = AnalyticsRepository.get_consistency_scores(db, start_date, user_id)
+        contracts_rows = AnalyticsRepository.get_contracts_for_reports(db, start_date, user_id)
         
         # Combine quality scores by month
         quality_dict = {}
@@ -308,9 +313,9 @@ class AnalyticsService:
         )
     
     @staticmethod
-    def export_report(db: Session, format: str) -> io.BytesIO:
+    def export_report(db: Session, format: str, user_id: int) -> io.BytesIO:
         """Generate report export (CSV or Excel)"""
-        reports_data = AnalyticsService.get_reports_data(db, 180)  # 6 months
+        reports_data = AnalyticsService.get_reports_data(db, 180, user_id)  # 6 months
         
         if format == 'csv':
             return AnalyticsService._generate_csv_report(reports_data)
