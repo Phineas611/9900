@@ -16,8 +16,13 @@ from app.persistence.contract_repository import update_contract_processing_statu
 # Anchor output root under the backend directory (not repository root).
 # pipeline.py is at: backend/app/utils/text_extractor/pipeline.py
 # parents[3] => backend/
+import os
 BACKEND_DIR = Path(__file__).resolve().parents[3]
-DEFAULT_OUTPUT_ROOT = BACKEND_DIR / "outputs"
+# Use persistent disk if OUTPUT_DIR is set (for Render), otherwise use backend/outputs
+if os.getenv("OUTPUT_DIR"):
+    DEFAULT_OUTPUT_ROOT = Path(os.getenv("OUTPUT_DIR"))
+else:
+    DEFAULT_OUTPUT_ROOT = BACKEND_DIR / "outputs"
 
 
 @dataclass

@@ -13,8 +13,13 @@ from app.persistence.contract_repository import get_contract_by_id
 router = APIRouter(prefix="/uploads", tags=["uploads"])
 
 # Anchor outputs under backend directory to align with processing pipeline
+import os
 BACKEND_DIR = Path(__file__).resolve().parents[3]
-OUTPUT_ROOT = BACKEND_DIR / "outputs"
+# Use persistent disk if OUTPUT_DIR is set (for Render), otherwise use backend/outputs
+if os.getenv("OUTPUT_DIR"):
+    OUTPUT_ROOT = Path(os.getenv("OUTPUT_DIR"))
+else:
+    OUTPUT_ROOT = BACKEND_DIR / "outputs"
 
 @router.post("/", response_model=FileUploadResponse)
 def upload_contract(    

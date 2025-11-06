@@ -71,8 +71,14 @@ class BackgroundProcessor:
                 db.add(job)
                 db.commit()
 
-                backend_dir = Path(__file__).resolve().parents[3]
-                output_root = backend_dir / "outputs" / str(user_id) / str(contract_id)
+                import os
+                # Use persistent disk if OUTPUT_DIR is set (for Render), otherwise use backend/outputs
+                if os.getenv("OUTPUT_DIR"):
+                    output_base = Path(os.getenv("OUTPUT_DIR"))
+                else:
+                    backend_dir = Path(__file__).resolve().parents[3]
+                    output_base = backend_dir / "outputs"
+                output_root = output_base / str(user_id) / str(contract_id)
                 csv_path = output_root / "sentences.csv"
                 if not csv_path.exists():
                     # fallback to first subdir CSV

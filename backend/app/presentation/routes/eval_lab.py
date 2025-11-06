@@ -12,7 +12,9 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select, func
 
 from app.database.setup import get_db, SessionLocal
+from app.application.auth import get_current_user
 from app.database.models.eval_lab import EvalLabJob, EvalLabRecord
+from app.database.models.activity_log import ActivityLog
 from app.application.models.eval_lab import (
     EvalUploadResponse,
     EvalRunRequest,
@@ -69,14 +71,14 @@ def _norm_class_lower(val: Optional[str]) -> Optional[str]:
     return None
 
 
-async def _run_in_background(job_id: str, run_id: str, assess_req: AssessRequest):
+async def _run_in_background(job_id: str, run_id: str, assess_req: AssessRequest, user_id: int):
     """Execute assessment asynchronously, then materialize EvalLabRecord and update job status."""
     db = SessionLocal()
     repo = EvaluationRepository()
     svc = EvaluationService(repo)
     try:
         # Run assess and persist summary to evaluation_runs
-        await svc.assess_async(db, user_id=1, req=assess_req)
+        await svc.assess_async(db, user_id=user_id, req=assess_req)
 
         # Materialize results into EvalLabRecord for frontend compatibility
         from datetime import datetime, timezone
@@ -161,6 +163,22 @@ async def _run_in_background(job_id: str, run_id: str, assess_req: AssessRequest
         }
         db.add(job)
         db.commit()
+        
+        # Create activity log for evaluation completion
+        try:
+            file_name = os.path.basename(job.file_path) if job.file_path else "evaluation file"
+            activity_log = ActivityLog(
+                user_id=user_id,
+                event_type="EVALUATION",
+                title="Evaluation Completed",
+                message=f"Evaluation completed for {total} sentences from '{file_name}'. Class accuracy: {job.metrics_summary.get('class_accuracy', 0):.2%}, Rationale pass rate: {job.metrics_summary.get('rationale_pass_rate', 0):.2%}"
+            )
+            db.add(activity_log)
+            db.commit()
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Failed to create activity log: {e}")
     except Exception as e:
         # Mark run failed and keep job state without finishing
         try:
@@ -224,7 +242,12 @@ async def upload_result_file(
 
 
 @router.post("/run", status_code=202)
-async def run_evaluation(req: EvalRunRequest, db: Session = Depends(get_db), response: Response = None):
+async def run_evaluation(
+    req: EvalRunRequest, 
+    db: Session = Depends(get_db), 
+    response: Response = None,
+    current_user = Depends(get_current_user),
+):
     job = db.get(EvalLabJob, req.job_id)
     if not job:
         raise HTTPException(status_code=404, detail="job not found")
@@ -239,7 +262,7 @@ async def run_evaluation(req: EvalRunRequest, db: Session = Depends(get_db), res
     repo = EvaluationRepository()
     svc = EvaluationService(repo)
     run_id = uuid.uuid4().hex
-    repo.create_run(db, run_id=run_id, user_id=1, file_name=os.path.basename(job.file_path), config={
+    repo.create_run(db, run_id=run_id, user_id=current_user.id, file_name=os.path.basename(job.file_path), config={
         "job_id": job.job_id,
         "columns_map": cols,
     })
@@ -281,7 +304,7 @@ async def run_evaluation(req: EvalRunRequest, db: Session = Depends(get_db), res
     # Schedule background task if not already running
     JOB_TO_RUN[req.job_id] = run_id
     if run_id not in RUN_TASKS or RUN_TASKS[run_id].done():
-        RUN_TASKS[run_id] = asyncio.create_task(_run_in_background(req.job_id, run_id, assess_req))
+        RUN_TASKS[run_id] = asyncio.create_task(_run_in_background(req.job_id, run_id, assess_req, current_user.id))
 
     # Immediate 202 Accepted with state links
     if response is not None:
