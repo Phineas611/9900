@@ -12,9 +12,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select, func
 
 from app.database.setup import get_db, SessionLocal
-from app.application.auth import get_current_user
 from app.database.models.eval_lab import EvalLabJob, EvalLabRecord
-from app.database.models.activity_log import ActivityLog
 from app.application.models.eval_lab import (
     EvalUploadResponse,
     EvalRunRequest,
@@ -28,6 +26,9 @@ from app.application.services.judges import get_available_judges
 from app.application.models.evaluation import AssessRequest, DEFAULT_JUDGES
 from app.persistence.evaluation_repository import EvaluationRepository
 from app.application.services.evaluation_service import EvaluationService
+from app.database.models.evaluation_run import EvaluationRun
+from app.database.models.evaluation_item import EvaluationItem
+from app.database.models.evaluation_aggregate import EvaluationAggregate
 
 
 router = APIRouter(prefix="/eval-lab", tags=["Evaluation Lab"])
@@ -37,15 +38,29 @@ BACKEND_DIR = Path(__file__).resolve().parents[3]
 DATA_DIR = BACKEND_DIR / os.getenv("DATA_DIR", "data/eval_lab")
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-# ---------------------------
-# Async task registry (in-memory)
-# ---------------------------
+
 RUN_TASKS: Dict[str, asyncio.Task] = {}
 JOB_TO_RUN: Dict[str, str] = {}
 
 
 def _build_assess_request(run_id: str, req: EvalRunRequest, rows_count: int) -> AssessRequest:
-    judge_models = req.judges or DEFAULT_JUDGES[:]
+
+    if req.judges:
+        jids: List[str] = []
+        for j in req.judges:
+            try:
+                jid = (j or {}).get("id")
+            except Exception:
+                jid = None
+            if isinstance(jid, str):
+                jids.append(jid.strip())
+        judge_models = jids if jids else DEFAULT_JUDGES[:]
+    else:
+        judge_models = DEFAULT_JUDGES[:]
+
+
+    expand = False
+
     crit = req.rubrics or {k: True for k in DEFAULT_RUBRICS}
     manual_metrics = req.custom_metrics or []
     return AssessRequest(
@@ -56,6 +71,7 @@ def _build_assess_request(run_id: str, req: EvalRunRequest, rows_count: int) -> 
         page_limit=rows_count,
         temperature=0.0,
         require_json=True,
+        expand_judges=expand,
     )
 
 
@@ -71,14 +87,20 @@ def _norm_class_lower(val: Optional[str]) -> Optional[str]:
     return None
 
 
-async def _run_in_background(job_id: str, run_id: str, assess_req: AssessRequest, user_id: int):
+async def _run_in_background(job_id: str, run_id: str, assess_req: AssessRequest):
     """Execute assessment asynchronously, then materialize EvalLabRecord and update job status."""
     db = SessionLocal()
     repo = EvaluationRepository()
     svc = EvaluationService(repo)
     try:
         # Run assess and persist summary to evaluation_runs
-        await svc.assess_async(db, user_id=user_id, req=assess_req)
+        summary = await svc.assess_async(db, user_id=1, req=assess_req)
+      
+        try:
+            repo.finish_run(db, run_id, summary)
+        except Exception:
+           
+            pass
 
         # Materialize results into EvalLabRecord for frontend compatibility
         from datetime import datetime, timezone
@@ -163,22 +185,6 @@ async def _run_in_background(job_id: str, run_id: str, assess_req: AssessRequest
         }
         db.add(job)
         db.commit()
-        
-        # Create activity log for evaluation completion
-        try:
-            file_name = os.path.basename(job.file_path) if job.file_path else "evaluation file"
-            activity_log = ActivityLog(
-                user_id=user_id,
-                event_type="EVALUATION",
-                title="Evaluation Completed",
-                message=f"Evaluation completed for {total} sentences from '{file_name}'. Class accuracy: {job.metrics_summary.get('class_accuracy', 0):.2%}, Rationale pass rate: {job.metrics_summary.get('rationale_pass_rate', 0):.2%}"
-            )
-            db.add(activity_log)
-            db.commit()
-        except Exception as e:
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.warning(f"Failed to create activity log: {e}")
     except Exception as e:
         # Mark run failed and keep job state without finishing
         try:
@@ -242,27 +248,22 @@ async def upload_result_file(
 
 
 @router.post("/run", status_code=202)
-async def run_evaluation(
-    req: EvalRunRequest, 
-    db: Session = Depends(get_db), 
-    response: Response = None,
-    current_user = Depends(get_current_user),
-):
+async def run_evaluation(req: EvalRunRequest, db: Session = Depends(get_db), response: Response = None):
     job = db.get(EvalLabJob, req.job_id)
     if not job:
         raise HTTPException(status_code=404, detail="job not found")
 
-    # 读取原文件并映射列
+
     try:
         df, cols = load_table(job.file_path)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to parse file: {e}")
 
-    # 创建 EvaluationService 运行并批量插入条目
+
     repo = EvaluationRepository()
     svc = EvaluationService(repo)
     run_id = uuid.uuid4().hex
-    repo.create_run(db, run_id=run_id, user_id=current_user.id, file_name=os.path.basename(job.file_path), config={
+    repo.create_run(db, run_id=run_id, user_id=1, file_name=os.path.basename(job.file_path), config={
         "job_id": job.job_id,
         "columns_map": cols,
     })
@@ -288,7 +289,7 @@ async def run_evaluation(
         rows.append(row)
     repo.bulk_insert_items(db, run_id, rows)
 
-    # 评审配置映射 + 作业元数据预写入
+
     assess_req = _build_assess_request(run_id, req, len(rows))
     from datetime import datetime, timezone
     job.started_at = datetime.now(timezone.utc)
@@ -301,10 +302,9 @@ async def run_evaluation(
     db.add(job)
     db.commit()
 
-    # Schedule background task if not already running
     JOB_TO_RUN[req.job_id] = run_id
     if run_id not in RUN_TASKS or RUN_TASKS[run_id].done():
-        RUN_TASKS[run_id] = asyncio.create_task(_run_in_background(req.job_id, run_id, assess_req, current_user.id))
+        RUN_TASKS[run_id] = asyncio.create_task(_run_in_background(req.job_id, run_id, assess_req))
 
     # Immediate 202 Accepted with state links
     if response is not None:
@@ -319,22 +319,7 @@ async def run_evaluation(
     }
 
 
-@router.get("/jobs/{job_id}", response_model=EvalJobStatus)
-def job_status(job_id: str, db: Session = Depends(get_db)):
-    job = db.get(EvalLabJob, job_id)
-    if not job:
-        raise HTTPException(status_code=404, detail="job not found")
-    return {
-        "job_id": job.job_id,
-        "total": job.total,
-        "finished": job.finished,
-        "started_at": job.started_at,
-        "finished_at": job.finished_at,
-        "judges": job.judges,
-        "rubrics": job.rubrics,
-        "custom_metrics": job.custom_metrics,
-        "metrics_summary": job.metrics_summary or {},
-    }
+# Removed legacy Job Status endpoint in favor of /jobs/{job_id}/state
 
 
 @router.get("/jobs/{job_id}/state")
@@ -342,22 +327,114 @@ def job_state(job_id: str, db: Session = Depends(get_db)):
     job = db.get(EvalLabJob, job_id)
     if not job:
         raise HTTPException(status_code=404, detail="task/run not found")
-    status = "QUEUED"
-    if job.started_at and not job.finished_at:
-        status = "PROCESSING"
-    elif job.finished_at:
-        status = "DONE"
-    progress = None
+
+
+    status: str
+    if job.finished_at:
+        status = "completed"
+    elif job.started_at:
+        status = "processing"
+    else:
+        status = "pending"
+
+
+    run: Optional[EvaluationRun] = None
     try:
-        progress = (job.finished / max(1, job.total)) if job.total else 0.0
+        run = db.execute(
+            select(EvaluationRun)
+            .where(EvaluationRun.config["job_id"].as_string() == job_id)
+            .order_by(EvaluationRun.created_at.desc())
+        ).scalars().first()
     except Exception:
-        progress = None
+        run = None
+    if run is None:
+        try:
+            run = db.execute(
+                select(EvaluationRun)
+                .where(EvaluationRun.file_name == os.path.basename(job.file_path))
+                .order_by(EvaluationRun.created_at.desc())
+            ).scalars().first()
+        except Exception:
+            run = None
+
+
+    message: Optional[str] = None
+    if run:
+        st = (run.status or "").upper()
+        if st.startswith("FAILED"):
+            status = "failed"
+            message = run.summary or run.status or "Failed"
+        elif st == "DONE":
+            status = "completed"
+            message = "Completed"
+        elif st == "PROCESSING":
+            status = "processing"
+            message = "Processing"
+        elif st == "QUEUED":
+            status = "pending"
+            message = "Queued"
+
+
+    progress_obj: Optional[dict] = None
+    if run:
+        try:
+            total_items = db.execute(
+                select(func.count()).select_from(
+                    select(EvaluationItem)
+                    .where(EvaluationItem.run_id == run.id)
+                    .subquery()
+                )
+            ).scalar_one()
+            done_aggs = db.execute(
+                select(func.count()).select_from(
+                    select(EvaluationAggregate)
+                    .where(EvaluationAggregate.run_id == run.id)
+                    .subquery()
+                )
+            ).scalar_one()
+            if total_items and total_items > 0:
+                progress_obj = {"current": int(done_aggs or 0), "total": int(total_items)}
+        except Exception:
+            progress_obj = None
+
+    if progress_obj is None and job.total and job.total > 0:
+        progress_obj = {"current": int(job.finished or 0), "total": int(job.total)}
+
+
+    started_at = job.started_at
+    finished_at = job.finished_at
+    if run:
+        try:
+            if run.created_at:
+                started_at = run.created_at
+            if run.finished_at:
+                finished_at = run.finished_at
+        except Exception:
+            pass
+
+ 
+    if message is None:
+        if status == "pending":
+            message = "Queued"
+        elif status == "processing":
+            message = "Processing"
+        elif status == "completed":
+            message = "Completed"
+        elif status == "failed":
+            message = "Failed"
+
     return {
         "task_id": job_id,
         "status": status,
-        "started_at": job.started_at,
-        "finished_at": job.finished_at,
-        "progress": progress,
+        "progress": progress_obj,
+        "message": message,
+        "started_at": started_at,
+        "finished_at": finished_at,
+        # Include metrics_summary so frontend no longer needs the removed /jobs/{job_id}
+        "metrics_summary": job.metrics_summary or {},
+        "judges": job.judges,
+        "rubrics": job.rubrics,
+        "custom_metrics": job.custom_metrics,
     }
 
 

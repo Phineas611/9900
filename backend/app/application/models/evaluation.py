@@ -32,6 +32,7 @@ class AssessRequest(BaseModel):
     page_limit: int = 500
     temperature: float = 0.0
     require_json: bool = True
+    expand_judges: bool = True  
 
 class VerdictLeaf(BaseModel):
     # "pass" is reserved keyword in Python; expose via alias

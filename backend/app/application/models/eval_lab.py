@@ -27,26 +27,29 @@ class EvalUploadResponse(BaseModel):
 
 class EvalRunRequest(BaseModel):
     job_id: str
-    judges: Optional[List[str]] = None  #If it is empty, the system defaults to three judges
-    rubrics: Optional[Dict[str, bool]] = None  # If it is empty, the system defaults to three judges
-    custom_metrics: Optional[List[str]] = None  # User-defined metrics, such as [" Executability ", "legal basis Citation "]
+    judges: Optional[List[Dict[str, str]]] = None  
+    rubrics: Optional[Dict[str, bool]] = None      
+    custom_metrics: Optional[List[str]] = None    
 
-    # 明确 API 示例，避免 additionalProp1/2/3
+ 
     model_config = ConfigDict(json_schema_extra={
-        "examples": [{
-            "job_id": "example-job-id",
-            "judges": ["judge-mini-a", "judge-mini-b", "judge-mini-c"],
+        "example": {
+            "job_id": "",
+            "judges": [
+                {"id": "groq/llama-3.1-8b-instant", "label": "judge-mini-a"},
+                {"id": "groq/llama-3.3-70b-versatile", "label": "judge-mini-c"},
+                {"id": "hf/prometheus-7b-v2.0", "label": "judge-mini-b"}
+            ],
             "rubrics": {
-                "grammar": True,
-                "word_choice": True,
+                "clarity": True,
                 "cohesion": True,
-                "conciseness": True,
                 "completeness": True,
+                "conciseness": True,
                 "correctness": True,
-                "clarity": True
-            },
-            "custom_metrics": []
-        }]
+                "grammar": True,
+                "word_choice": True
+            }
+        }
     })
 
 
