@@ -1,4 +1,5 @@
 from typing import Iterable, List, Dict, Any, Optional, Tuple
+from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from sqlalchemy import select, func
 from app.database.models.evaluation_run import EvaluationRun
@@ -20,7 +21,11 @@ class EvaluationRepository:
         db.commit()
 
     def finish_run(self, db: Session, run_id: str, summary: dict):
-        db.query(EvaluationRun).filter(EvaluationRun.id == run_id).update({"status": "DONE", "summary": summary})
+        db.query(EvaluationRun).filter(EvaluationRun.id == run_id).update({
+            "status": "DONE",
+            "summary": summary,
+            "finished_at": datetime.now(timezone.utc)
+        })
         db.commit()
 
     def get_run(self, db: Session, run_id: str) -> Optional[EvaluationRun]:
