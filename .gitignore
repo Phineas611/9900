@@ -47,3 +47,7 @@ backend/alembic/
 backend/testdata/
 backend/test_workflow.py
 backend/TEST_WORKFLOW.md
+
+.env
+**/.env
+backend/.env
