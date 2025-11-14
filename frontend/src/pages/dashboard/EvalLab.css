@@ -20,7 +20,6 @@
   font-weight: 600;
 }
 
-/* Error Message */
 .error-message {
   background: #fed7d7;
   color: #c53030;
@@ -31,7 +30,6 @@
   font-weight: 500;
 }
 
-/* Panels */
 .config-panel,
 .upload-panel,
 .status-panel,
@@ -44,7 +42,6 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
-/* Configuration Section */
 .config-section {
   margin-bottom: 20px;
 }
@@ -92,7 +89,6 @@
   margin: 0;
 }
 
-/* Upload Panel */
 .upload-controls {
   display: flex;
   flex-direction: column;
@@ -206,6 +202,7 @@
 .run-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+  background: #a0aec0;
 }
 
 .upload-info {
@@ -219,16 +216,76 @@
   margin-bottom: 12px;
 }
 
-/* Status Panel */
 .status-content {
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
-.progress-info {
+.status-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.status-badge {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.status-badge-running {
+  background: #ebf8ff;
+  color: #3182ce;
+  border: 1px solid #bee3f8;
+}
+
+.status-badge-completed {
+  background: #f0fff4;
+  color: #38a169;
+  border: 1px solid #c6f6d5;
+}
+
+.status-badge-failed {
+  background: #fed7d7;
+  color: #e53e3e;
+  border: 1px solid #feb2b2;
+}
+
+.status-badge-pending {
+  background: #faf089;
+  color: #d69e2e;
+  border: 1px solid #faf089;
+}
+
+.status-details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.status-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+}
+
+.status-label {
   font-weight: 500;
+  color: #4a5568;
+  font-size: 0.9rem;
+}
+
+.status-value {
   color: #2d3748;
+  font-size: 0.9rem;
+}
+
+.progress-section {
+  margin: 8px 0;
 }
 
 .progress-bar {
@@ -265,7 +322,13 @@
   font-size: 0.85rem;
 }
 
-/* Records Panel */
+.status-placeholder {
+  color: #718096;
+  font-style: italic;
+  text-align: center;
+  padding: 20px;
+}
+
 .export-buttons {
   display: flex;
   gap: 8px;
@@ -368,7 +431,6 @@
   font-size: 0.85rem;
 }
 
-/* Responsive */
 @media (max-width: 768px) {
   .eval-lab {
     padding: 16px;
@@ -411,5 +473,11 @@
   
   .export-buttons {
     flex-direction: column;
+  }
+
+  .status-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
   }
 }

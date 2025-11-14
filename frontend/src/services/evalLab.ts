@@ -20,8 +20,9 @@ export type EvalRunRequest = {
 
 export type EvalJobStatus = {
   job_id: string;
+  status: string;
   total: number;
-  finished: number;
+  progress: number;
   started_at?: string;
   finished_at?: string;
   judges: string[];
@@ -55,7 +56,7 @@ export type EvalRecordsPage = {
 };
 
 export async function getConfig(): Promise<EvalConfig> {
-  const res = await fetch(`${API_BASE_URL}/config`);
+  const res = await fetch(`${API_BASE_URL}/eval-lab/config`);
   if (!res.ok) throw new Error('Failed to fetch config');
   return res.json();
 }
@@ -63,13 +64,13 @@ export async function getConfig(): Promise<EvalConfig> {
 export async function uploadFile(file: File): Promise<EvalUploadResponse> {
   const fd = new FormData();
   fd.append('file', file);
-  const res = await fetch(`${API_BASE_URL}/upload`, { method: 'POST', body: fd });
+  const res = await fetch(`${API_BASE_URL}/eval-lab/upload`, { method: 'POST', body: fd });
   if (!res.ok) throw new Error('Upload failed');
   return res.json();
 }
 
 export async function runEval(body: EvalRunRequest): Promise<{ job_id: string; total: number; started_at?: string }> {
-  const res = await fetch(`${API_BASE_URL}/run`, {
+  const res = await fetch(`${API_BASE_URL}/eval-lab/run`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -79,7 +80,7 @@ export async function runEval(body: EvalRunRequest): Promise<{ job_id: string; t
 }
 
 export async function getJobStatus(jobId: string): Promise<EvalJobStatus> {
-  const res = await fetch(`${API_BASE_URL}/jobs/${jobId}`);
+  const res = await fetch(`${API_BASE_URL}/eval-lab/jobs/${jobId}/state`);
   if (!res.ok) throw new Error('Status fetch failed');
   return res.json();
 }
@@ -95,15 +96,15 @@ export async function listRecords(
     page_size: String(pageSize),
     ...(judgeFilter && judgeFilter.length ? { judges: judgeFilter.join(',') } : {}),
   });
-  const res = await fetch(`${API_BASE_URL}/jobs/${jobId}/records?${qp.toString()}`);
+  const res = await fetch(`${API_BASE_URL}/eval-lab/jobs/${jobId}/records?${qp.toString()}`);
   if (!res.ok) throw new Error('Records fetch failed');
   return res.json();
 }
 
 export function exportCsvUrl(jobId: string): string {
-  return `${API_BASE_URL}/jobs/${jobId}/export.csv`;
+  return `${API_BASE_URL}/eval-lab/jobs/${jobId}/export.csv`;
 }
 
 export function exportXlsxUrl(jobId: string): string {
-  return `${API_BASE_URL}/jobs/${jobId}/export.xlsx`;
+  return `${API_BASE_URL}/eval-lab/jobs/${jobId}/export.xlsx`;
 }

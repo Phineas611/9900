@@ -241,11 +241,11 @@ const DashboardMain = () => {
 
           <div className="stat-card">
             <div className="stat-header">
-              <div className="stat-title">Analyzed Contracts</div>
+              <div className="stat-title">Ambiguous Sentences</div>
               <div className="stat-icon"></div>
             </div>
             <div className="stat-value">{stats.certificatesGenerated}</div>
-            <div className="stat-label">Sentences resulting classification</div>
+            <div className="stat-label">Sentences resulting segmentation</div>
             <div className={`stat-change ${stats.certificatesChange >= 0 ? 'positive' : 'negative'}`}>
               {stats.certificatesChange >= 0 ? '+' : ''}{stats.certificatesChange}% from last month
             </div>
@@ -253,10 +253,10 @@ const DashboardMain = () => {
 
           <div className="stat-card">
             <div className="stat-header">
-              <div className="stat-title">Analyzed Contracts</div>
+              <div className="stat-title">Clarity Score</div>
               <div className="stat-icon"></div>
             </div>
-            <div className="stat-value">{stats.averageScore}/10</div>
+            <div className="stat-value">{stats.averageScore}/1</div>
             <div className="stat-label">Average explanation diarty</div>
             <div className={`stat-change ${stats.scoreChange >= 0 ? 'positive' : 'negative'}`}>
               {stats.scoreChange >= 0 ? '+' : ''}{stats.scoreChange} from last month
@@ -265,7 +265,7 @@ const DashboardMain = () => {
 
           <div className="stat-card">
             <div className="stat-header">
-              <div className="stat-title">Analyzed Contracts</div>
+              <div className="stat-title">Processing Time</div>
               <div className="stat-icon"></div>
             </div>
             <div className="stat-value">{stats.averageTime} min</div>
@@ -315,20 +315,17 @@ const DashboardMain = () => {
                         <circle cx="12" cy="12" r="3"></circle>
                       </svg>
                     </button>
-                    <button className="action-btn-dashboard-main" title="Download report" onClick={() => window.location.href = `/${upload.fileName}`}>
+                    <button className="action-btn-dashboard-main" title="Download report" onClick={() => window.location.href = `/api/uploads/${upload.id}/download/csv`}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                         <polyline points="7 10 12 15 17 10"></polyline>
                         <line x1="12" y1="15" x2="12" y2="3"></line>
                       </svg>
                     </button>
-                    <button className="action-btn-dashboard-main" title="Share">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <circle cx="18" cy="5" r="3"></circle>
-                        <circle cx="6" cy="12" r="3"></circle>
-                        <circle cx="18" cy="19" r="3"></circle>
-                        <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
-                        <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+                    <button className="action-btn-dashboard-main" title="Go Prompt Lab" onClick={() => window.location.href = `/prompt_lab?id=${upload.id}`}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="5" y1="12" x2="19" y2="12" />
+                        <polyline points="13 6 19 12 13 18" />
                       </svg>
                     </button>
                   </td>

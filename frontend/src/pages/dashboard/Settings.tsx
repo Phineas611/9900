@@ -1,72 +1,76 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import './Settings.css';
 
 interface SettingsState {
-  // Model Settings
   defaultModel: string;
   explanationLanguage: string;
   confidenceThreshold: number;
   enableModelComparison: boolean;
-
-  // Report Templates
   defaultFormat: string;
   templateStyle: string;
   reportHeader: string;
   signatureBlock: string;
   includeCharts: boolean;
-
-  // Data Retention Policy
   retentionPeriod: string;
   autoDeleteFiles: boolean;
   exportBeforeDeletion: boolean;
-
-  // Notifications
   emailNotifications: boolean;
   processingComplete: boolean;
   weeklyDigest: boolean;
   securityAlerts: boolean;
-
-  // Interface Preferences
   theme: string;
   contextView: boolean;
   showConfidenceScores: boolean;
   highlightAmbiguousText: boolean;
 }
 
+const useTheme = () => {
+  const [theme, setTheme] = useState<string>(() => {
+    return localStorage.getItem('app-theme') || 'system';
+  });
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.remove('light', 'dark', 'system', 'gray');
+    if (theme !== 'system') {
+      root.classList.add(theme);
+    }
+    localStorage.setItem('app-theme', theme);
+  }, [theme]);
+
+  return { theme, setTheme };
+};
+
 const Settings = () => {
+  const { theme, setTheme } = useTheme();
+
   const [settings, setSettings] = useState<SettingsState>({
-    // Model Settings
     defaultModel: 'Ensemble Model',
     explanationLanguage: 'Standard',
     confidenceThreshold: 70,
     enableModelComparison: true,
-
-    // Report Templates
     defaultFormat: 'PDF Report',
     templateStyle: 'Professional',
     reportHeader: 'Legal Contract Analysis Report',
     signatureBlock: 'Enter signature or lower text',
     includeCharts: true,
-
-    // Data Retention Policy
     retentionPeriod: '12 Months',
     autoDeleteFiles: true,
     exportBeforeDeletion: true,
-
-    // Notifications
     emailNotifications: true,
     processingComplete: true,
     weeklyDigest: true,
     securityAlerts: true,
-
-    // Interface Preferences
-    theme: 'System',
+    theme: theme,
     contextView: false,
     showConfidenceScores: true,
     highlightAmbiguousText: true,
   });
 
   const handleInputChange = (field: keyof SettingsState, value: any) => {
+    if (field === 'theme') {
+      setTheme(value);
+    }
     setSettings(prev => ({
       ...prev,
       [field]: value
@@ -74,6 +78,9 @@ const Settings = () => {
   };
 
   const handleReset = () => {
+    const defaultTheme = 'system';
+    setTheme(defaultTheme);
+    
     setSettings({
       defaultModel: 'Ensemble Model',
       explanationLanguage: 'Standard',
@@ -91,7 +98,7 @@ const Settings = () => {
       processingComplete: true,
       weeklyDigest: true,
       securityAlerts: true,
-      theme: 'System',
+      theme: defaultTheme,
       contextView: false,
       showConfidenceScores: true,
       highlightAmbiguousText: true,
@@ -128,7 +135,6 @@ const Settings = () => {
 
   return (
     <div className="settings-page">
-      {/* Page Header */}
       <div className="page-header">
         <div className="header-content">
           <div className="header-text">
@@ -147,7 +153,6 @@ const Settings = () => {
       </div>
 
       <div className="settings-content">
-        {/* Model Settings */}
         <div className="settings-section">
           <div className="section-header">
             <div className="section-icon">🧠</div>
@@ -218,7 +223,6 @@ const Settings = () => {
           </div>
         </div>
 
-        {/* Report Templates */}
         <div className="settings-section">
           <div className="section-header">
             <h2>Report Templates</h2>
@@ -292,7 +296,6 @@ const Settings = () => {
           </div>
         </div>
 
-        {/* Data Retention Policy */}
         <div className="settings-section">
           <div className="section-header">
             <div className="section-icon">📊</div>
@@ -348,7 +351,6 @@ const Settings = () => {
           </div>
         </div>
 
-        {/* Notifications */}
         <div className="settings-section">
           <div className="section-header">
             <div className="section-icon">📊</div>
@@ -418,7 +420,6 @@ const Settings = () => {
           </div>
         </div>
 
-        {/* Interface Preferences */}
         <div className="settings-section">
           <div className="section-header">
             <div className="section-icon">📊</div>
@@ -432,14 +433,14 @@ const Settings = () => {
             <div className="setting-item">
               <label className="setting-label">Theme</label>
               <select 
-                value={settings.theme}
+                value={theme}
                 onChange={(e) => handleInputChange('theme', e.target.value)}
                 className="setting-input"
               >
-                <option value="System">System</option>
-                <option value="Light">Light</option>
-                <option value="Dark">Dark</option>
-                <option value="Auto">Auto</option>
+                <option value="system">System</option>
+                <option value="light">Light</option>
+                <option value="dark">Dark</option>
+                <option value="gray">Gray</option>
               </select>
             </div>
 

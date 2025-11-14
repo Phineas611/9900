@@ -40,3 +40,22 @@
 .read-the-docs {
   color: #888;
 }
+
+.light * {
+  background-color: #e6f7ff !important;
+  color: #003366 !important;
+}
+
+.dark * {
+  background-color: #111 !important;
+  color: #ccc !important;
+}
+
+.gray * {
+  background-color: #666 !important;
+  color: #fff !important;
+}
+
+.system * {
+  all: unset;
+}

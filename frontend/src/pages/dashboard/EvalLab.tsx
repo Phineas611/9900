@@ -38,6 +38,7 @@ export default function EvalLab() {
   const [rubrics, setRubrics] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
 
   useEffect(() => {
     getConfig()
@@ -55,12 +56,15 @@ export default function EvalLab() {
   const onUpload = async () => {
     if (!file) return;
     setError(null);
+    setIsUploading(true);
     try {
       const res = await uploadFile(file);
       setUpload(res);
       setJobId(res.job_id);
     } catch (e) {
       setError(String(e));
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -69,8 +73,8 @@ export default function EvalLab() {
     setError(null);
     try {
       const judges = selectedJudges.length ? selectedJudges : config?.judges.map((j) => j.id) || [];
-      await runEval({ job_id: jobId, judges, rubrics });
       setPolling(true);
+      await runEval({ job_id: jobId, judges, rubrics });
       startPolling(jobId);
     } catch (e) {
       setError(String(e));
@@ -82,7 +86,7 @@ export default function EvalLab() {
       try {
         const s = await getJobStatus(jid);
         setStatus(s);
-        if (s.total > 0 && s.finished >= s.total) {
+        if (s.status === 'DONE' || s.status === 'FAILED') {
           clearInterval(timer);
           setPolling(false);
         }
@@ -99,11 +103,11 @@ export default function EvalLab() {
     listRecords(jobId, page, pageSize, selectedJudges)
       .then((r) => setRecords(r))
       .catch(() => {});
-  }, [jobId, status?.finished, page, pageSize, selectedJudges]);
+  }, [jobId, status?.progress, page, pageSize, selectedJudges]);
 
   const progress = useMemo(() => {
     if (!status || !status.total) return 0;
-    return Math.min(100, Math.round((status.finished / status.total) * 100));
+    return Math.min(100, Math.round((status.progress / (status.total || 1)) * 100));
   }, [status]);
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -125,12 +129,14 @@ export default function EvalLab() {
     }
   };
 
+  const isRunButtonDisabled = !jobId || polling || status?.status === 'DONE';
+  const isUploadButtonDisabled = !file || isUploading;
+
   return (
     <div className="eval-lab">
       <h2>Evaluation Lab</h2>
       {error && <div className="error-message">Error: {error}</div>}
 
-      {/* Config panel */}
       <section className="config-panel">
         <h3>Configuration</h3>
         <div className="config-section">
@@ -170,7 +176,6 @@ export default function EvalLab() {
         </div>
       </section>
 
-      {/* Upload panel */}
       <section className="upload-panel">
         <h3>Upload & Run</h3>
         <div className="upload-controls">
@@ -203,48 +208,79 @@ export default function EvalLab() {
               </div>
             )}
           </div>
-          <button onClick={onUpload} disabled={!file} className="upload-btn">
-            Upload
+          <button 
+            onClick={onUpload} 
+            disabled={isUploadButtonDisabled} 
+            className="upload-btn"
+          >
+            {isUploading ? 'Uploading...' : 'Upload'}
           </button>
         </div>
         {upload && (
           <div className="upload-info">
             <div className="job-id">Job ID: {upload.job_id}</div>
-            <button onClick={onRun} disabled={!jobId || polling} className="run-btn">
-              {polling ? 'Evaluating...' : 'Start Evaluation'}
+            <button 
+              onClick={onRun} 
+              disabled={isRunButtonDisabled}
+              className="run-btn"
+            >
+              {polling ? 'Evaluating...' : status?.status === 'DONE' ? 'Evaluation Complete' : 'Start Evaluation'}
             </button>
           </div>
         )}
       </section>
 
-      {/* Status panel */}
       <section className="status-panel">
         <h3>Status & Summary</h3>
         {status ? (
           <div className="status-content">
-            <div className="progress-info">
-              Progress: {status.finished} / {status.total} ({progress}%)
-            </div>
-            <div className="progress-bar">
-              <div className="progress-fill" style={{ width: `${progress}%` }} />
-            </div>
-            <div className="metrics-summary">
-              <strong>Summary:</strong>
-              <div className="metrics-grid">
-                {Object.entries(status.metrics_summary || {}).map(([k, v]) => (
-                  <div key={k} className="metric-item">
-                    {k}: {typeof v === 'number' ? v.toFixed(3) : String(v)}
-                  </div>
-                ))}
+            <div className="status-header">
+              <div className="status-badge status-badge-running">
+                {status.status === 'RUNNING' && 'Running'}
+                {status.status === 'DONE' && 'Completed'}
+                {status.status === 'FAILED' && 'Failed'}
+                {status.status === 'PROCESSING' && 'Processing'}
               </div>
             </div>
+            <div className="status-details">
+              <div className="status-row">
+                <span className="status-label">Start Time:  {new Date(status.started_at!).toLocaleString()}</span>
+                {/*<span className="status-value">{new Date(status.started_at!).toLocaleString()}</span>*/}
+              </div>
+              {status.finished_at && (
+                <div className="status-row">
+                  <span className="status-label">Finish Time:  {new Date(status.finished_at).toLocaleString()}</span>
+                  {/*<span className="status-value">{new Date(status.finished_at).toLocaleString()}</span>*/}
+                </div>
+              )}
+              <div className="status-row">
+                <span className="status-label">Progress:  {status.progress} / {status.total || 1} ({progress}%)</span>
+                {/*<span className="status-value">{status.progress} / {status.total || 1} ({progress}%)</span>*/}
+              </div>
+            </div>
+            <div className="progress-section">
+              <div className="progress-bar">
+                <div className="progress-fill" style={{ width: `${progress}%` }} />
+              </div>
+            </div>
+            {status.metrics_summary && Object.keys(status.metrics_summary).length > 0 && (
+              <div className="metrics-summary">
+                <strong>Summary:</strong>
+                <div className="metrics-grid">
+                  {Object.entries(status.metrics_summary).map(([k, v]) => (
+                    <div key={k} className="metric-item">
+                      {k}: {typeof v === 'number' ? v.toFixed(3) : String(v)}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         ) : (
-          <div>No evaluation running or loading...</div>
+          <div className="status-placeholder">No evaluation running or loading...</div>
         )}
       </section>
 
-      {/* Records panel */}
       <section className="records-panel">
         <h3>Records & Export</h3>
         {jobId ? (

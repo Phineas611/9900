@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-// import { API_BASE_URL } from '../../../services/api'
+import { API_BASE_URL } from '../../../services/api'
 import './AllContracts.css';
 
 // Types
@@ -25,14 +25,6 @@ interface Contract {
   tags: string[];
 }
 
-/*
-interface ApiResponse<T> {
-  data: T;
-  success: boolean;
-  message?: string;
-}
-*/
-
 const AllContracts = () => {
   // State management
   const [stats, setStats] = useState<ContractStats | null>(null);
@@ -52,31 +44,19 @@ const AllContracts = () => {
 
   // Fetch contract statistics
   const fetchContractStats = async (): Promise<ContractStats> => {
-    return {
-      totalContracts: 156,
-      totalContractsChange: 12,
-      analyzedSentences: 24567,
-      analyzedSentencesChange: 8,
-      averageAmbiguityRate: 7.8,
-      averageAmbiguityRateChange: -8.3,
-      averageQualityScore: 7.2,
-      averageQualityScoreChange: 0.5
-    };
-    /*
     const response = await fetch(`${API_BASE_URL}/contracts/stats`, {
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('token')}`,
         'Content-Type': 'application/json',
       },
     });
-    
+
     if (!response.ok) {
       throw new Error('Failed to fetch contract statistics');
     }
-    
-    const result: ApiResponse<ContractStats> = await response.json();
-    return result.data;
-    */
+
+    const result = await response.json();
+    return result;
   };
 
   // Fetch contracts with filters and pagination
@@ -85,54 +65,8 @@ const AllContracts = () => {
     limit: number, 
     search: string, 
     type: string, 
-    _: string
+    status: string
   ): Promise<{ items: Contract[]; total: number }> => {
-    const mockContracts: Contract[] = [
-      {
-        id: '1',
-        name: 'Software_License_Agreement.pdf',
-        date: '2024-01-15',
-        type: 'PDF',
-        sentences: 81234,
-        ambiguityRate: 12.5,
-        qualityScore: 8.2,
-        tags: ['Software', 'License', 'Technology']
-      },
-      {
-        id: '2',
-        name: 'Employment_Contract_v2.docx',
-        date: '2024-01-14',
-        type: 'DOCX',
-        sentences: 4567,
-        ambiguityRate: 8.3,
-        qualityScore: 7.8,
-        tags: ['Employment', 'HR', 'Legal']
-      }
-    ];
-  
-    let filteredContracts = mockContracts;
-    
-    if (search) {
-      filteredContracts = filteredContracts.filter(contract => 
-        contract.name.toLowerCase().includes(search.toLowerCase())
-      );
-    }
-    
-    if (type) {
-      filteredContracts = filteredContracts.filter(contract => 
-        contract.type === type
-      );
-    }
-  
-    const startIndex = (page - 1) * limit;
-    const endIndex = startIndex + limit;
-    const paginatedContracts = filteredContracts.slice(startIndex, endIndex);
-  
-    return {
-      items: paginatedContracts,
-      total: filteredContracts.length
-    };
-    /*
     const params = new URLSearchParams({
       page: page.toString(),
       limit: limit.toString(),
@@ -152,9 +86,8 @@ const AllContracts = () => {
       throw new Error('Failed to fetch contracts data');
     }
     
-    const result: ApiResponse<{ items: Contract[]; total: number }> = await response.json();
-    return result.data;
-    */
+    const result = await response.json();
+    return result;
   };
 
   // Load all data
@@ -187,10 +120,12 @@ const AllContracts = () => {
   };
 
   // Handle filter changes
+  /*
   const handleFilterChange = () => {
     setCurrentPage(1);
     loadData();
   };
+  */
 
   // Handle pagination
   const handlePageChange = (page: number) => {
@@ -250,21 +185,21 @@ const AllContracts = () => {
               value={typeFilter}
               onChange={(e) => {
                 setTypeFilter(e.target.value);
-                handleFilterChange();
+                // handleFilterChange();
               }}
               className="filter-select"
             >
               <option value="">All Types</option>
-              <option value="PDF">PDF</option>
-              <option value="DOCX">DOCX</option>
-              <option value="TXT">TXT</option>
+              <option value=".pdf">.pdf</option>
+              <option value=".docx">.docx</option>
+              <option value=".txt">.txt</option>
             </select>
             
             <select 
               value={statusFilter}
               onChange={(e) => {
                 setStatusFilter(e.target.value);
-                handleFilterChange();
+                // handleFilterChange();
               }}
               className="filter-select"
             >
@@ -325,7 +260,7 @@ const AllContracts = () => {
               <div className="stat-title">Quality Score</div>
               <div className="stat-icon">⭐</div>
             </div>
-            <div className="stat-value">{stats.averageQualityScore}/10</div>
+            <div className="stat-value">{stats.averageQualityScore.toFixed(2)}/1</div>
             <div className="stat-label">Average quality score</div>
             <div className={`stat-change ${stats.averageQualityScoreChange >= 0 ? 'positive' : 'negative'}`}>
               {stats.averageQualityScoreChange >= 0 ? '+' : ''}{stats.averageQualityScoreChange} from last month
@@ -364,8 +299,8 @@ const AllContracts = () => {
                   <td className="contract-name">
                     <div className="name-wrapper">
                       <span className="file-icon">
-                        {contract.type === 'PDF' ? '📄' : 
-                         contract.type === 'DOCX' ? '📝' : '📃'}
+                        {contract.type === '.pdf' ? '📄' : 
+                         contract.type === '.docx' ? '📝' : '📃'}
                       </span>
                       {contract.name}
                     </div>

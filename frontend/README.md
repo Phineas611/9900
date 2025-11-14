@@ -1,73 +1,98 @@
-# React + TypeScript + Vite
+# Contract Analysis Dashboard
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A comprehensive web application for analyzing legal contracts and identifying ambiguous language using AI-powered natural language processing.
 
-Currently, two official plugins are available:
+## Overview
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+The Contract Analysis Dashboard is a React-based web application designed to help legal professionals, contract managers, and compliance teams analyze legal documents for ambiguous clauses and improve contract clarity. The system leverages advanced language models to provide detailed explanations of potentially problematic contract language.
 
-## React Compiler
+## Features
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### Dashboard
+- **Overview Metrics**: Real-time statistics on contract processing
+- **Recent Uploads**: Track and manage analyzed contracts
+- **Quick Actions**: Fast access to common tasks and recent activities
+- **Performance Analytics**: Monitor system performance and analysis trends
 
-## Expanding the ESLint configuration
+### Contract Repository
+- **All Contracts**: Comprehensive view of all analyzed contracts with search and filtering
+- **Trends & Patterns**: Visual analytics showing contract analysis trends over time
+- **Recurring Phrases**: Identify commonly used ambiguous terms across contracts
+- **Advanced Filtering**: Filter by contract type, status, and date ranges
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+### Sentence Analysis
+- **Detailed Analysis**: In-depth examination of individual sentences
+- **Ambiguity Detection**: AI-powered identification of unclear language
+- **Plain-English Explanations**: Clear explanations of why phrases are ambiguous
+- **Batch Processing**: Analyze multiple sentences simultaneously
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+### Evaluation Lab
+- **Model Testing**: Compare different AI models and prompts
+- **Custom Rubrics**: Define evaluation criteria for contract analysis
+- **Batch Evaluation**: Test models on multiple sentences simultaneously
+- **Performance Metrics**: Detailed analytics on model performance
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+### Prompt Lab
+- **Prompt Engineering**: Test and optimize different prompt templates
+- **Model Comparison**: Evaluate different language models side-by-side
+- **Custom Prompts**: Create and test custom analysis prompts
+- **File Processing**: Upload and analyze contract files in bulk
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+### Reports & Analytics
+- **Model Performance**: Track explanation quality and accuracy metrics
+- **Ambiguity Trends**: Monitor ambiguity rates over time
+- **Contract Type Analysis**: Compare ambiguity across different contract types
+- **Export Capabilities**: Generate comprehensive reports in multiple formats
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Technology Stack
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+### Frontend
+- **React 18** - Modern React with hooks and functional components
+- **TypeScript** - Type-safe JavaScript development
+- **React Router** - Client-side routing and navigation
+- **Recharts** - Data visualization and charting library
+- **CSS3** - Custom styling with modern CSS features
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+### Backend Integration
+- **RESTful APIs** - Standardized API communication
+- **JWT Authentication** - Secure user authentication
+- **File Upload** - Support for multiple document formats
+- **Real-time Updates** - WebSocket integration for live status updates
+
+### AI/ML Integration
+- **Language Models** - Integration with various LLMs
+- **Ensemble Methods** - Combined model predictions for improved accuracy
+- **Custom NLP Pipelines** - Specialized processing for legal text
+- **Evaluation Framework** - Systematic model performance assessment
+
+## Installation & Setup
+
+### Prerequisites
+- Node.js 16+ and npm/yarn
+- Modern web browser with ES6+ support
+- Backend API service (see backend documentation)
+
+### Quick Start
+
+1. **Clone the repository**
+   git clone git@github.com:unsw-cse-comp99-3900/LegalContractAnalyzer_h18c_bread.git
+   cd LegalContractAnalyzer_h18c_bread/frontend
+
+2. **Install dependencies**
+   npm install
+
+3. **Start development server**
+   npm run dev
+
+4. **Open your browser**
+   Navigate to http://localhost:5173
+
+### Production Build
+   npm run build
+
+### Deployment
+   The application is configured for easy deployment to Vercel. Simply run:
+   npm run deploy
+
+   The current front-end production version is deployed at: https://frontend-khaki-nine-49.vercel.app/
+   The backend production version deployed at: https://legalcontractanalyzer-backend.onrender.com/docs

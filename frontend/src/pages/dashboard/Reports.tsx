@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { API_BASE_URL } from '../../services/api'
 import {
   LineChart,
   Line,
@@ -186,37 +187,20 @@ const Reports = () => {
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
 
-  // Mock data
-  const mockReportsData: ReportsData = {
-    stats: {
-      totalContracts: 156,
-      ambiguousSentences: 24567,
-      ambiguityRate: 12.8,
-      avgQualityScore: 7.8
-    },
-    qualityMetrics: [
-      { month: 'Jan', clarity: 7.2, completeness: 6.8, accuracy: 7.5, consistency: 6.9 },
-      { month: 'Feb', clarity: 7.4, completeness: 7.1, accuracy: 7.6, consistency: 7.2 },
-      { month: 'Mar', clarity: 7.6, completeness: 7.3, accuracy: 7.8, consistency: 7.4 },
-      { month: 'Apr', clarity: 7.8, completeness: 7.5, accuracy: 8.0, consistency: 7.6 },
-      { month: 'May', clarity: 8.0, completeness: 7.7, accuracy: 8.2, consistency: 7.8 },
-      { month: 'Jun', clarity: 8.2, completeness: 7.9, accuracy: 8.4, consistency: 8.0 }
-    ],
-    ambiguityTrends: [
-      { month: 'Jan', ambiguityRate: 15.2, targetRate: 10 },
-      { month: 'Feb', ambiguityRate: 14.6, targetRate: 10 },
-      { month: 'Mar', ambiguityRate: 13.8, targetRate: 10 },
-      { month: 'Apr', ambiguityRate: 12.9, targetRate: 10 },
-      { month: 'May', ambiguityRate: 11.5, targetRate: 10 },
-      { month: 'Jun', ambiguityRate: 10.8, targetRate: 10 }
-    ],
-    contractAnalysis: [
-      { name: 'Partnership Agreement', totalSentences: 153156, ambiguousSentences: 24505, percentage: 16.0 },
-      { name: 'Service Agreement', totalSentences: 23456, ambiguousSentences: 2815, percentage: 12.0 },
-      { name: 'NDA Template', totalSentences: 12086, ambiguousSentences: 1692, percentage: 14.0 },
-      { name: 'Employment Contract', totalSentences: 4567, ambiguousSentences: 502, percentage: 11.0 },
-      { name: 'Software License Agreement', totalSentences: 81234, ambiguousSentences: 8926, percentage: 11.0 }
-    ]
+  const fetchReportsData = async (): Promise<ReportsData> => {
+    const response = await fetch(`${API_BASE_URL}/reports/data`, {
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch chart data');
+    }
+
+    const result = await response.json();
+    return result;
   };
 
   // Simulate API call
@@ -225,9 +209,8 @@ const Reports = () => {
       try {
         setLoading(true);
         setError(null);
-        
-        await new Promise(resolve => setTimeout(resolve, 800));
-        setData(mockReportsData);
+        const reportsData = await fetchReportsData();
+        setData(reportsData);
       } catch (err) {
         setError('Failed to load reports data');
         console.error('Reports data loading error:', err);
@@ -261,7 +244,7 @@ const Reports = () => {
         openPDFPrint(content);
       }
       
-      alert(`Report exported successfully as ${settings.format.toUpperCase()}!`);
+      // alert(`Report exported successfully as ${settings.format.toUpperCase()}!`);
     } catch (error) {
       console.error('Export failed:', error);
       alert('Export failed. Please try again.');
@@ -280,7 +263,7 @@ const Reports = () => {
       csvContent += 'Total Contracts,' + data.stats.totalContracts + '\n';
       csvContent += 'Ambiguous Sentences,' + data.stats.ambiguousSentences + '\n';
       csvContent += 'Ambiguity Rate,' + data.stats.ambiguityRate + '%\n';
-      csvContent += 'Average Quality Score,' + data.stats.avgQualityScore + '/10\n\n';
+      csvContent += 'Average Quality Score,' + data.stats.avgQualityScore + '/1\n\n';
     }
 
     // Add quality metrics
@@ -358,7 +341,7 @@ const Reports = () => {
           <tr><td>Total Contracts</td><td>${data.stats.totalContracts}</td></tr>
           <tr><td>Ambiguous Sentences</td><td>${data.stats.ambiguousSentences.toLocaleString()}</td></tr>
           <tr><td>Ambiguity Rate</td><td>${data.stats.ambiguityRate}%</td></tr>
-          <tr><td>Average Quality Score</td><td>${data.stats.avgQualityScore}/10</td></tr>
+          <tr><td>Average Quality Score</td><td>${data.stats.avgQualityScore}/1</td></tr>
         </table>
       `;
     }
@@ -465,7 +448,7 @@ const Reports = () => {
               <div>Average Ambiguity Rate</div>
             </div>
             <div class="stat-card">
-              <div class="stat-value">${data.stats.avgQualityScore}/10</div>
+              <div class="stat-value">${data.stats.avgQualityScore}/1</div>
               <div>Average Quality Score</div>
             </div>
           </div>
@@ -726,7 +709,7 @@ const Reports = () => {
               <div className="stat-title">Avg Quality Score</div>
               <div className="stat-icon">⭐</div>
             </div>
-            <div className="stat-value">{data.stats.avgQualityScore}/10</div>
+            <div className="stat-value">{data.stats.avgQualityScore}/1</div>
             <div className="stat-label">Explanation quality</div>
           </div>
         </div>

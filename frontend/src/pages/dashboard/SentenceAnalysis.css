@@ -5,7 +5,6 @@
   text-align: left;
 }
 
-/* Page Header */
 .page-header {
   margin-bottom: 32px;
   text-align: left;
@@ -26,7 +25,6 @@
   text-align: left;
 }
 
-/* Tools Card */
 .tools-card {
   background: white;
   border: 1px solid #e2e8f0;
@@ -73,7 +71,6 @@
   width: 100%;
 }
 
-/* Search Section */
 .search-section {
   flex: 1;
   min-width: 300px;
@@ -103,7 +100,6 @@
   color: #a0aec0;
 }
 
-/* Filters Row */
 .filters-row {
   display: flex;
   gap: 16px;
@@ -164,7 +160,6 @@
   background: #2f855a;
 }
 
-/* Statistics Cards */
 .stats-cards {
   display: flex;
   gap: 20px;
@@ -198,7 +193,6 @@
   font-weight: 500;
 }
 
-/* Results Card */
 .results-card {
   background: white;
   border: 1px solid #e2e8f0;
@@ -230,7 +224,6 @@
   text-align: left;
 }
 
-/* Table Styles */
 .table-container {
   overflow-x: auto;
 }
@@ -260,7 +253,6 @@
   text-align: left;
 }
 
-/* Sentence Row Styles */
 .sentence-row {
   transition: background-color 0.2s;
 }
@@ -297,6 +289,11 @@
   line-height: 1.4;
 }
 
+.doc-name {
+  font-size: 0.8rem;
+  color: #718096;
+}
+
 .page-number {
   color: #718096;
   font-weight: 500;
@@ -304,7 +301,6 @@
   width: 80px;
 }
 
-/* No Results */
 .no-results {
   text-align: center;
   padding: 40px !important;
@@ -316,7 +312,6 @@
   font-style: italic;
 }
 
-/* Classification Badges */
 .classification-badge {
   padding: 6px 12px;
   border-radius: 20px;
@@ -335,7 +330,11 @@
   color: #276749;
 }
 
-/* Confidence and Score */
+.classification-badge.pending {
+  background-color: #fef5e7;
+  color: #dd6b20;
+}
+
 .confidence-value,
 .score-value {
   font-weight: 600;
@@ -350,7 +349,6 @@
   color: #38a169;
 }
 
-/* Actions */
 .actions-sentence {
   white-space: nowrap;
   text-align: center;
@@ -382,7 +380,6 @@
   color: white;
 }
 
-/* Sentence Detail Styles */
 .sentence-detail-row {
   background-color: #f7fafc;
   border-left: 4px solid #3182ce;
@@ -433,19 +430,13 @@
   padding: 12px 0;
 }
 
-.ambiguity-reasons {
+.classification-details {
   color: #4a5568;
-  padding-left: 20px;
-  margin: 0;
+  line-height: 1.6;
 }
 
-.ambiguity-reasons li {
-  margin-bottom: 8px;
-  line-height: 1.5;
-}
-
-.ambiguity-reasons li:last-child {
-  margin-bottom: 0;
+.classification-details p {
+  margin: 8px 0;
 }
 
 .action-buttons {
@@ -471,7 +462,6 @@
   color: white;
 }
 
-/* Pagination */
 .pagination {
   display: flex;
   justify-content: center;
@@ -509,7 +499,6 @@
   font-weight: 500;
 }
 
-/* Loading and Error States */
 .loading, .error {
   display: flex;
   justify-content: center;
@@ -542,7 +531,6 @@
   background-color: #2c5aa0;
 }
 
-/* Responsive Design */
 @media (max-width: 1024px) {
   .filters-search-row {
     flex-direction: column;

@@ -10,6 +10,7 @@ import './DashboardPage.css';
 import UploadPage from './dashboard/UploadPage';
 import SentenceAnalysis from './dashboard/SentenceAnalysis'
 import EvalLab from './dashboard/EvalLab'
+import PromptLab from './dashboard/PromptLab'
 
 // Definition of menu item types
 interface MenuItem {
@@ -61,6 +62,13 @@ const DashboardPage = () => {
       path: '/eval_lab'
     },
     {
+      key: 'prompt_lab',
+      label: 'Prompt Lab',
+      icon: '🧠',
+      path: '/prompt_lab'
+    },
+    /*
+    {
       key: 'model comparison',
       label: 'Model Comparison',
       icon: '🧠',
@@ -72,6 +80,7 @@ const DashboardPage = () => {
       icon: '⭐',
       path: '/manual_scoring'
     },
+    */
     {
       key: 'reports',
       label: 'Reports',
@@ -158,6 +167,7 @@ const DashboardPage = () => {
           <Route path="/dashboard_main" element={<DashboardMain />} />
           <Route path="/contracts" element={<Contracts />} />
           <Route path="/eval_lab" element={<EvalLab />} />
+          <Route path="/prompt_lab" element={<PromptLab />} />
           <Route path="/model_comparison" element={<ModelComparison />} />
           <Route path="/manual_scoring" element={<ManualScoring />} />
           <Route path="/reports" element={<Reports />} />
