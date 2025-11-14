@@ -132,6 +132,18 @@ export default function EvalLab() {
   const isRunButtonDisabled = !jobId || polling || status?.status === 'DONE';
   const isUploadButtonDisabled = !file || isUploading;
 
+  const mapJudgeIdToDisplayName = (id: string): string => {
+    const mapping: Record<string, string> = {
+      'judge-mini-a': 'judge-a-llama-3.1-8b-instant',
+      'judge-mini-b': 'judge-b-prometheus-7b-v2.0',
+      'judge-mini-c': 'judge-c-llama-3.3-70b-versatile',
+      'groq/llama-3.1-8b-instant': 'judge-a-llama-3.1-8b-instant',
+      'hf/prometheus-7b-v2.0': 'judge-b-prometheus-7b-v2.0',
+      'groq/llama-3.3-70b-versatile': 'judge-c-llama-3.3-70b-versatile'
+    };
+    return mapping[id] || id;
+  };
+
   return (
     <div className="eval-lab">
       <h2>Evaluation Lab</h2>
@@ -153,7 +165,7 @@ export default function EvalLab() {
                     );
                   }}
                 />
-                {j.label}
+                {mapJudgeIdToDisplayName(j.label)}
               </label>
             ))}
           </div>

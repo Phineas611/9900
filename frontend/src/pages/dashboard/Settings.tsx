@@ -44,7 +44,7 @@ const useTheme = () => {
 const Settings = () => {
   const { theme, setTheme } = useTheme();
 
-  const [settings, setSettings] = useState<SettingsState>({
+  const [_, setSettings] = useState<SettingsState>({
     defaultModel: 'Ensemble Model',
     explanationLanguage: 'Standard',
     confidenceThreshold: 70,
@@ -77,6 +77,7 @@ const Settings = () => {
     }));
   };
 
+  /*
   const handleReset = () => {
     const defaultTheme = 'system';
     setTheme(defaultTheme);
@@ -132,6 +133,7 @@ const Settings = () => {
       </label>
     );
   };
+  */
 
   return (
     <div className="settings-page">
@@ -139,8 +141,9 @@ const Settings = () => {
         <div className="header-content">
           <div className="header-text">
             <h1>Settings</h1>
-            <p>Configure models, reports, data retention, and application preferences</p>
+            <p>Configure application preferences</p>
           </div>
+          {/*
           <div className="header-actions">
             <button className="btn-secondary" onClick={handleReset}>
               Reset to Defaults
@@ -149,10 +152,12 @@ const Settings = () => {
               Save Changes
             </button>
           </div>
+          */}
         </div>
       </div>
 
       <div className="settings-content">
+        {/*
         <div className="settings-section">
           <div className="section-header">
             <div className="section-icon">🧠</div>
@@ -419,6 +424,7 @@ const Settings = () => {
             </div>
           </div>
         </div>
+        */}
 
         <div className="settings-section">
           <div className="section-header">
@@ -444,6 +450,7 @@ const Settings = () => {
               </select>
             </div>
 
+            {/*
             <div className="toggle-item">
               <div className="toggle-content">
                 <div className="toggle-text">
@@ -482,6 +489,7 @@ const Settings = () => {
                 />
               </div>
             </div>
+            */}
           </div>
         </div>
       </div>
