@@ -1,20 +1,19 @@
 import os
 import re
+import json
+import time
 from typing import List, Optional, Dict, Any, Callable
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 
-from huggingface_hub import InferenceClient
+import requests
+from urllib.parse import quote
+
 try:
-    from huggingface_hub.errors import HfHubHTTPError, InferenceTimeoutError
+    from huggingface_hub import get_token  # optional
 except Exception:
-    try:
-        from huggingface_hub.utils import HfHubHTTPError, InferenceTimeoutError  # type: ignore
-    except Exception:
-        class HfHubHTTPError(Exception):
-            pass
-        class InferenceTimeoutError(Exception):
-            pass
+    def get_token() -> Optional[str]:
+        return None
 
 from app.database.models.contract_sentence import ContractSentence
 from app.application.models.promptlab import (
@@ -24,50 +23,60 @@ from app.application.models.promptlab import (
 
 
 class PromptLabService:
+    """
+    Call HF router with task-correct endpoints:
+      - seq2seq (FLAN-T5):   /hf-inference/text2text-generation?model=<enc_repo>
+      - causal (Qwen/GPT2):  /hf-inference/text-generation?model=<enc_repo>
+    URL-encode repo id (google%2Fflan-t5-large). Keep API/DB/batch unchanged.
+    """
 
     def __init__(self):
         self._models: Dict[str, Dict[str, Any]] = {
-            "distilbert-base": {
-                "id": "distilbert-base",
-                "name": "DistilBERT SST-2 (classification)",
-                "hf_name": "distilbert/distilbert-base-uncased-finetuned-sst-2-english",
-                "task": "text-classification",
+            "flan-t5-large": {
+                "id": "flan-t5-large",
+                "name": "FLAN-T5 Large (seq2seq, instruction following)",
+                "hf_name": "google/flan-t5-large",
+                "mode": "seq2seq",
             },
-            "legal-bert": {
-                "id": "legal-bert",
-                "name": "FinBERT (classification)",
-                "hf_name": "ProsusAI/finbert",
-                "task": "text-classification",
+            "qwen2.5-0.5b-instruct": {
+                "id": "qwen2.5-0.5b-instruct",
+                "name": "Qwen2.5 0.5B Instruct (causal decoder)",
+                "hf_name": "Qwen/Qwen2.5-0.5B-Instruct",
+                "mode": "causal",
             },
             "gpt2-small": {
                 "id": "gpt2-small",
                 "name": "GPT-2 Small (generation)",
                 "hf_name": "openai-community/gpt2",
-                "task": "text-generation",
+                "mode": "causal",
             },
         }
-        self._current_model_id: str = "distilbert-base"
+        self._current_model_id: str = "flan-t5-large"
 
         self._prompts: Dict[str, str] = {
             "amb-basic": (
-                "Classify the following contract clause as AMBIGUOUS or UNAMBIGUOUS, "
-                "then briefly explain why.\nClause: {clause}\nOutput:"
+                "You are a contract ambiguity checker.\n"
+                "Task: Decide if the clause is AMBIGUOUS or UNAMBIGUOUS, then give a short rationale.\n"
+                "Return format:\n"
+                "Label: <AMBIGUOUS|UNAMBIGUOUS>\n"
+                "Reason: <one sentence>\n"
+                "Clause: {clause}\n"
             ),
             "amb-strict": (
-                "You are a contract ambiguity checker. If multiple reasonable meanings exist, "
-                "return AMBIGUOUS, else UNAMBIGUOUS. Provide a short reason.\nClause: {clause}\n"
+                "If multiple reasonable interpretations exist, return AMBIGUOUS; otherwise UNAMBIGUOUS. "
+                "Explain briefly in one sentence.\nClause: {clause}\n"
             ),
             "amb-layman": (
                 "Explain for a non-lawyer whether this clause is ambiguous. "
-                "First say 'Ambiguous' or 'Not Ambiguous', then give a short explanation.\n"
+                "First output 'Label: Ambiguous' or 'Label: Unambiguous', then a one-sentence reason.\n"
                 "Clause: {clause}\n"
             ),
             "amb-risky": (
-                "If the clause leaves room for interpretation (actors/times/amounts/conditions), "
+                "If the clause leaves room for interpretation in actors, time, amounts, or conditions, "
                 "mark AMBIGUOUS and justify briefly.\nClause: {clause}\n"
             ),
             "amb-short": (
-                "Is this clause ambiguous? Answer AMBIGUOUS or UNAMBIGUOUS, then one-sentence reason.\n"
+                "Is this clause ambiguous? Output 'Label: AMBIGUOUS' or 'Label: UNAMBIGUOUS', then one-sentence reason.\n"
                 "Clause: {clause}\n"
             ),
         }
@@ -75,7 +84,7 @@ class PromptLabService:
         self._cache: Dict[str, Dict[str, Any]] = {}
         self._last_hf_error: Optional[str] = None
 
-    # ---------- model management ----------
+    # ---------- model mgmt ----------
     def list_models(self) -> List[Dict[str, Any]]:
         return list(self._models.values())
 
@@ -88,7 +97,7 @@ class PromptLabService:
         self._current_model_id = model_id
         return True
 
-    # ---------- prompt management ----------
+    # ---------- prompts ----------
     def list_prompts(self) -> List[str]:
         return list(self._prompts.keys())
 
@@ -107,108 +116,172 @@ class PromptLabService:
             raise ValueError(f"Unknown prompt_id: {prompt_id}")
         return self._prompts[prompt_id]
 
-    # ---------- inference on HF ----------
-    def _get_hf_client(self) -> InferenceClient:
-        hf_token = os.environ.get("HF_API_TOKEN")
-        if not hf_token:
+    # ---------- HF token ----------
+    def _resolve_hf_token(self) -> str:
+        token = (
+            os.environ.get("HF_API_TOKEN")
+            or os.environ.get("HF_TOKEN")
+            or os.environ.get("HUGGINGFACEHUB_API_TOKEN")
+            or (get_token() if callable(get_token) else None)
+        )
+        if not token:
             raise RuntimeError(
-                "HF_API_TOKEN is not set in environment. "
-                "Please set it in Render Dashboard > Environment Variables."
+                "Hugging Face token not set. Please export HF_API_TOKEN (or HF_TOKEN / HUGGINGFACEHUB_API_TOKEN)."
             )
-        return InferenceClient(token=hf_token, timeout=90)
+        return token.strip()
 
+    # ---------- HTTP to router ----------
+    def _hf_http_infer(self, repo: str, inputs: str, mode: str) -> List[Dict[str, Any]]:
+        """
+        Use ONLY task-correct endpoints:
+          - seq2seq:  /text2text-generation?model=<enc_repo>
+          - causal:   /text-generation?model=<enc_repo>
+        """
+        token = self._resolve_hf_token()
+        enc_repo = quote(repo, safe="")  # encode slash
+        base_router = "https://router.huggingface.co/hf-inference"
+        legacy_base = "https://api-inference.huggingface.co/models"
+
+        if mode == "seq2seq":
+            route = "text2text-generation"
+        else:
+            route = "text-generation"
+
+        candidates = [
+            f"{base_router}/{route}?model={enc_repo}",
+            f"{base_router}/{route}/{enc_repo}",
+            f"{base_router}/models/{enc_repo}",
+            f"{legacy_base}/{enc_repo}",
+        ]
+
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+            "x-wait-for-model": "true",
+            "Accept": "application/json",
+        }
+        payload = {
+            "inputs": inputs,
+            "parameters": {
+                "max_new_tokens": 160,
+                "temperature": 0.2,
+                "do_sample": False,
+                "return_full_text": False,
+            }
+        }
+        payload_with_model = dict(payload)
+        payload_with_model["model"] = repo
+
+        def _post(url: str) -> requests.Response:
+            body = payload_with_model if "api-inference" in url or url.endswith(enc_repo) else payload
+            return requests.post(url, headers=headers, json=body, timeout=90)
+
+        delays = [0, 2, 4, 8, 16, 32]
+        last_err = None
+
+        for url in candidates:
+            for attempt, delay in enumerate(delays, start=1):
+                if delay:
+                    time.sleep(delay)
+                try:
+                    resp = _post(url)
+                    status = resp.status_code
+                    if status == 200:
+                        return self._normalize_http_json(resp)
+
+                    if status in (429, 500, 502, 503, 504):
+                        last_err = f"http_router status={status} url={url} body={resp.text[:300].replace(chr(10),' ')}"
+                        print(f"[HF/router][attempt {attempt}] {last_err}")
+                        continue  # retry same URL
+
+                    # 404/405/415: wrong route or not provisioned -> no more alternatives for this mode
+                    last_err = f"http_router status={status} url={url} body={resp.text[:300].replace(chr(10),' ')}"
+                    print(f"[HF/router][attempt {attempt}] {last_err}")
+                    break
+
+                except requests.exceptions.RequestException as e:
+                    last_err = f"network_error url={url}: {repr(e)[:300]}"
+                    print(f"[HF/router][attempt {attempt}] {last_err}")
+                    continue
+                except Exception as e:
+                    last_err = f"other_error url={url}: {repr(e)[:300]}"
+                    print(f"[HF/router][attempt {attempt}] {last_err}")
+                    break
+
+        raise RuntimeError(last_err or "unknown error")
+
+    def _normalize_http_json(self, resp: requests.Response) -> List[Dict[str, Any]]:
+        """
+        Normalize HF HTTP response into: list[{'generated_text': '...'}]
+        """
+        try:
+            data = resp.json()
+        except Exception:
+            return [{"generated_text": resp.text}]
+
+        if isinstance(data, list) and data:
+            if isinstance(data[0], dict) and "generated_text" in data[0]:
+                return data
+            if isinstance(data[0], str):
+                return [{"generated_text": " ".join(data)}]
+            return [{"generated_text": json.dumps(data)[:5000]}]
+
+        if isinstance(data, dict):
+            if "generated_text" in data:
+                return [data]
+            if "outputs" in data and isinstance(data["outputs"], str):
+                return [{"generated_text": data["outputs"]}]
+            return [{"generated_text": json.dumps(data)[:5000]}]
+
+        if isinstance(data, str):
+            return [{"generated_text": data}]
+
+        return [{"generated_text": resp.text}]
+
+    # ---------- single-call inference ----------
     def _run_remote_model(self, model_id: str, text: str) -> Optional[Dict[str, Any]]:
         self._last_hf_error = None
-
         if model_id not in self._models:
             self._last_hf_error = f"Unknown model_id: {model_id}"
             return None
         cfg = self._models[model_id]
+        repo = cfg["hf_name"]
+        mode = cfg.get("mode", "causal")
 
         try:
-            client = self._get_hf_client()
+            data = self._hf_http_infer(repo, text, mode)
+            return self._normalize_hf_output(cfg, data)
         except Exception as e:
-            self._last_hf_error = f"client_init: {e}"
+            self._last_hf_error = str(e)
             return None
 
-        task = cfg.get("task", "text-classification")
-        repo = cfg["hf_name"]
-
-        import time
-        delays = [0, 2, 4, 8, 16, 32]  # ~1 min
-        last_err = None
-
-        for attempt, delay in enumerate(delays, start=1):
-            if delay:
-                time.sleep(delay)
-            try:
-                if task == "text-generation":
-                    out = client.text_generation(
-                        prompt=text,
-                        model=repo,
-                        max_new_tokens=96,
-                        temperature=0.2,
-                        do_sample=False,
-                        return_full_text=False,
-                    )
-                    data = [{"generated_text": out}]
-                else:
-                    data = client.text_classification(
-                        text=text,
-                        model=repo,
-                    )
-                return self._normalize_hf_output(cfg, data)
-
-            except (HfHubHTTPError, InferenceTimeoutError) as e:
-                status = getattr(getattr(e, "response", None), "status_code", None)
-                body = getattr(getattr(e, "response", None), "text", "") or str(e)
-                last_err = f"status={status} body={(body[:300]).replace(chr(10),' ')}"
-                print(f"[HF][attempt {attempt}] {last_err}")
-                # Retry on rate limit (429), service unavailable (503), and bad gateway (502)
-                if status in (429, 502, 503,500):
-                    continue
-                break  
-            except Exception as e:
-                last_err = f"other_error: {str(e)[:200]}"
-                print(f"[HF][attempt {attempt}] {last_err}")
-                break
-
-        self._last_hf_error = last_err or "unknown error"
-        return None
-
     def _normalize_hf_output(self, cfg: Dict[str, Any], data: Any) -> Dict[str, Any]:
-        task = cfg.get("task", "text-classification")
-        if task == "text-generation":
-            if isinstance(data, list) and data and "generated_text" in data[0]:
-                text = str(data[0]["generated_text"])
-                up = text.upper()
-                if "AMBIGUOUS" in up:
-                    label = "AMBIGUOUS"
-                elif "UNAMBIGUOUS" in up or "NOT AMBIGUOUS" in up:
-                    label = "UNAMBIGUOUS"
-                else:
-                    label = "AMBIGUOUS"
-                return {"label": label, "rationale": text.strip(), "score": 0.9}
-            return {"label": "AMBIGUOUS", "rationale": "Unsupported generation output.", "score": 0.5}
+        try:
+            if isinstance(data, list) and data and isinstance(data[0], dict) and "generated_text" in data[0]:
+                text = str(data[0]["generated_text"]).strip()
+            else:
+                text = str(data)
+        except Exception:
+            text = str(data)
 
-        if isinstance(data, list) and data and isinstance(data[0], dict) and "label" in data[0]:
-            first = data[0]
-            raw = str(first.get("label", "")).upper()
-            if any(k in raw for k in ("NEG", "CON", "0")):
+        up = text.upper()
+        m = re.search(r"LABEL\s*:\s*(AMBIGUOUS|UNAMBIGUOUS|NOT\s+AMBIGUOUS)", up)
+        if m:
+            raw = m.group(1)
+            label = "UNAMBIGUOUS" if "NOT" in raw else raw
+        else:
+            if "UNAMBIGUOUS" in up or "NOT AMBIGUOUS" in up:
+                label = "UNAMBIGUOUS"
+            elif "AMBIGUOUS" in up:
                 label = "AMBIGUOUS"
             else:
-                label = "UNAMBIGUOUS"
-            return {
-                "label": label,
-                "rationale": f"HF ({cfg['hf_name']}) predicted {raw} with score {first.get('score', 0):.3f}",
-                "score": float(first.get("score", 0.9)),
-            }
+                label = "AMBIGUOUS"
 
-        return {"label": "AMBIGUOUS", "rationale": "Unknown HF output format.", "score": 0.5}
+        return {"label": label, "rationale": text, "score": 0.9}
 
     def _run_inference(self, sentence: str, prompt: str) -> Dict[str, Any]:
         model = self.get_current_model()
-        text = sentence if model.get("task") == "text-classification" else prompt
+        text = prompt  # send rendered prompt to HF
 
         out = self._run_remote_model(model["id"], text)
         if not out:
@@ -219,23 +292,17 @@ class PromptLabService:
         out["rationale"] = "[HF] " + str(out.get("rationale", "")).lstrip()
         return out
 
-    # ---------- persistence ----------
+    # ---------- persistence (unchanged) ----------
     def _extract_score_from_rationale(self, rationale: str) -> Optional[float]:
         if not rationale:
-            return None 
-        patterns = [
-            r'score\s*:?\s*(\d+\.?\d*)', 
-            r'with\s+score\s+(\d+\.?\d*)',  
-        ]
-        
-        for pattern in patterns:
-            match = re.search(pattern, rationale, re.IGNORECASE)
-            if match:
+            return None
+        for pattern in (r'score\s*:?\s*(\d+\.?\d*)', r'with\s+score\s+(\d+\.?\d*)'):
+            m = re.search(pattern, rationale, re.IGNORECASE)
+            if m:
                 try:
-                    return float(match.group(1))
+                    return float(m.group(1))
                 except (ValueError, IndexError):
                     continue
-        
         return None
 
     def _persist_result(
@@ -252,7 +319,6 @@ class PromptLabService:
             return None
 
         try:
-
             row = (
                 db.query(ContractSentence)
                 .filter(
@@ -261,7 +327,6 @@ class PromptLabService:
                 )
                 .first()
             )
-            
             if not row:
                 row = (
                     db.query(ContractSentence)
@@ -281,10 +346,9 @@ class PromptLabService:
         row.label = label
         row.is_ambiguous = (label == "AMBIGUOUS")
         row.explanation = rationale
-        
+
         extracted_score = self._extract_score_from_rationale(rationale)
         row.clarity_score = extracted_score if extracted_score is not None else 0.9
-        
         row.updated_at = datetime.now(timezone.utc)
 
         db.add(row)
@@ -293,7 +357,7 @@ class PromptLabService:
             db.refresh(row)
         return row.id
 
-    # ---------- public ----------
+    # ---------- public (unchanged) ----------
     def classify_sentences(
         self,
         sentences: List[str],
@@ -307,7 +371,8 @@ class PromptLabService:
         model = self.get_current_model()
         res: List[ClassifyResult] = []
         for s in sentences:
-            inf = self._run_inference(s, prompt)
+            rendered = prompt.format(clause=s) if "{clause}" in prompt else f"{prompt}\nClause: {s}\n"
+            inf = self._run_inference(s, rendered)
             sid = self._persist_result(db, user_id, contract_id, s, inf["label"], inf["rationale"])
             res.append(
                 ClassifyResult(
@@ -333,7 +398,8 @@ class PromptLabService:
     ) -> ExplainResult:
         prompt = self._get_prompt(prompt_id, custom_prompt)
         model = self.get_current_model()
-        inf = self._run_inference(sentence, prompt)
+        rendered = prompt.format(clause=sentence) if "{clause}" in prompt else f"{prompt}\nClause: {sentence}\n"
+        inf = self._run_inference(sentence, rendered)
         sid = self._persist_result(db, user_id, contract_id, sentence, inf["label"], inf["rationale"])
         return ExplainResult(
             sentence=sentence,
@@ -356,24 +422,25 @@ class PromptLabService:
     ) -> List[ExplainResult]:
         import logging
         logger = logging.getLogger(__name__)
-        
+
         prompt = self._get_prompt(prompt_id, custom_prompt)
         model = self.get_current_model()
         out: List[ExplainResult] = []
         total = len(sentences)
-        
+
         logger.info(f"[PromptLab] Starting batch processing: {total} sentences, contract_id={contract_id}")
-        
+
         BATCH_SIZE = 10
         for i in range(0, len(sentences), BATCH_SIZE):
             batch = sentences[i:i + BATCH_SIZE]
             batch_num = i // BATCH_SIZE + 1
             total_batches = (total + BATCH_SIZE - 1) // BATCH_SIZE
             logger.info(f"[PromptLab] Processing batch {batch_num}/{total_batches} ({i+1}-{min(i+BATCH_SIZE, total)}/{total})")
-            
+
             for idx_in_batch, s in enumerate(batch):
                 try:
-                    inf = self._run_inference(s, prompt)
+                    rendered = prompt.format(clause=s) if "{clause}" in prompt else f"{prompt}\nClause: {s}\n"
+                    inf = self._run_inference(s, rendered)
                     sid = self._persist_result(db, user_id, contract_id, s, inf["label"], inf["rationale"], auto_commit=False)
                     out.append(
                         ExplainResult(
@@ -397,17 +464,15 @@ class PromptLabService:
                             sentence_id=None,
                         )
                     )
-            
+
             try:
                 db.commit()
                 logger.info(f"[PromptLab] Batch {batch_num}/{total_batches} committed successfully")
-                
                 if progress_callback:
                     progress_callback(i + len(batch), total)
-                    
             except Exception as e:
                 db.rollback()
                 logger.error(f"[PromptLab] Database commit failed for batch {batch_num}: {str(e)[:200]}")
-        
+
         logger.info(f"[PromptLab] Batch processing completed: {len(out)} results")
         return out
