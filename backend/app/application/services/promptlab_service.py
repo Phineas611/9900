@@ -135,8 +135,27 @@ class PromptLabService:
         repo = cfg["hf_name"]
 
         import time
+        import inspect
         delays = [0, 2, 4, 8, 16, 32]  # ~1 min
         last_err = None
+
+        wait_fn = getattr(client, "wait_for_model", None)
+        if callable(wait_fn):
+            sig = inspect.signature(wait_fn)
+            waited = False
+            for key in ("model", "repo_id"):
+                if key in sig.parameters:
+                    try:
+                        wait_fn(**{key: repo})
+                        waited = True
+                        break
+                    except TypeError:
+                        continue
+            if not waited:
+                try:
+                    wait_fn(repo)
+                except TypeError:
+                    pass
 
         for attempt, delay in enumerate(delays, start=1):
             if delay:
@@ -150,14 +169,12 @@ class PromptLabService:
                         temperature=0.2,
                         do_sample=False,
                         return_full_text=False,
-                        wait_for_model=True,
                     )
                     data = [{"generated_text": out}]
                 else:
                     data = client.text_classification(
                         text=text,
                         model=repo,
-                        wait_for_model=True,
                     )
                 return self._normalize_hf_output(cfg, data)
 
