@@ -150,12 +150,14 @@ class PromptLabService:
                         temperature=0.2,
                         do_sample=False,
                         return_full_text=False,
+                        wait_for_model=True,
                     )
                     data = [{"generated_text": out}]
                 else:
                     data = client.text_classification(
                         text=text,
                         model=repo,
+                        wait_for_model=True,
                     )
                 return self._normalize_hf_output(cfg, data)
 
@@ -165,7 +167,7 @@ class PromptLabService:
                 last_err = f"status={status} body={(body[:300]).replace(chr(10),' ')}"
                 print(f"[HF][attempt {attempt}] {last_err}")
                 # Retry on rate limit (429), service unavailable (503), and bad gateway (502)
-                if status in (429, 502, 503,500):
+                if status in (429, 502, 503, 500):
                     continue
                 break  
             except Exception as e:
