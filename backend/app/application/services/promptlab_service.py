@@ -136,7 +136,9 @@ class PromptLabService:
 
         import time
         import inspect
-        delays = [0, 2, 4, 8, 16, 32]  # ~1 min
+        from math import ceil
+
+        delays = [0, 1, 2, 4, 8, 16, 32, 32, 32]  # ~1.5 min default backoff
         last_err = None
 
         wait_fn = getattr(client, "wait_for_model", None)
@@ -157,9 +159,13 @@ class PromptLabService:
                 except TypeError:
                     pass
 
-        for attempt, delay in enumerate(delays, start=1):
-            if delay:
-                time.sleep(delay)
+        next_wait = 0.0
+        for attempt in range(1, len(delays) + 1):
+            delay = delays[attempt - 1]
+            sleep_for = max(next_wait, delay)
+            if sleep_for:
+                time.sleep(sleep_for)
+            next_wait = 0.0
             try:
                 if task == "text-generation":
                     out = client.text_generation(
@@ -185,8 +191,17 @@ class PromptLabService:
                 print(f"[HF][attempt {attempt}] {last_err}")
                 # Retry on rate limit (429), service unavailable (503), and bad gateway (502)
                 if status in (429, 502, 503, 500):
-                    continue
-                break  
+                    if getattr(e, "response", None) is not None:
+                        try:
+                            payload = e.response.json()
+                        except Exception:
+                            payload = None
+                        if isinstance(payload, dict):
+                            wait_hint = payload.get("estimated_time") or payload.get("estimated_time_seconds")
+                            if isinstance(wait_hint, (int, float)) and wait_hint > 0:
+                                next_wait = max(next_wait, ceil(wait_hint))
+                continue
+                break
             except Exception as e:
                 last_err = f"other_error: {str(e)[:200]}"
                 print(f"[HF][attempt {attempt}] {last_err}")
