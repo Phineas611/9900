@@ -73,7 +73,7 @@ class PromptLabService:
         }
 
         self._cache: Dict[str, Dict[str, Any]] = {}
-        self._hf_client: Optional[InferenceClient] = None
+        self._hf_clients: Dict[str, InferenceClient] = {}
         self._last_hf_error: Optional[str] = None
 
     # ---------- model management ----------
@@ -123,11 +123,13 @@ class PromptLabService:
             )
         return token.strip()
 
-    def _get_hf_client(self) -> InferenceClient:
-        if self._hf_client is None:
+    def _get_hf_client(self, repo: str) -> InferenceClient:
+        client = self._hf_clients.get(repo)
+        if client is None:
             token = self._resolve_hf_token()
-            self._hf_client = InferenceClient(token=token, timeout=90)
-        return self._hf_client
+            client = InferenceClient(model=repo, token=token, timeout=90)
+            self._hf_clients[repo] = client
+        return client
 
     def _run_remote_model(self, model_id: str, text: str) -> Optional[Dict[str, Any]]:
         self._last_hf_error = None
@@ -138,7 +140,7 @@ class PromptLabService:
         cfg = self._models[model_id]
 
         try:
-            client = self._get_hf_client()
+            client = self._get_hf_client(repo)
         except Exception as e:
             self._last_hf_error = f"client_init: {e}"
             return None
@@ -157,17 +159,17 @@ class PromptLabService:
                 if task == "text-generation":
                     out = client.text_generation(
                         prompt=text,
-                        model=repo,
                         max_new_tokens=96,
                         temperature=0.2,
                         do_sample=False,
                         return_full_text=False,
+                        wait_for_model=True,
                     )
                     data = [{"generated_text": out}]
                 else:
                     data = client.text_classification(
                         text=text,
-                        model=repo,
+                        wait_for_model=True,
                     )
                 return self._normalize_hf_output(cfg, data)
 
