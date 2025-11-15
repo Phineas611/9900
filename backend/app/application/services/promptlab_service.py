@@ -4,7 +4,7 @@ from typing import List, Optional, Dict, Any, Callable
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 
-from huggingface_hub import InferenceClient
+from huggingface_hub import InferenceClient, get_token
 try:
     from huggingface_hub.errors import HfHubHTTPError, InferenceTimeoutError
 except Exception:
@@ -27,17 +27,17 @@ class PromptLabService:
 
     def __init__(self):
         self._models: Dict[str, Dict[str, Any]] = {
-            "distilbert-base": {
-                "id": "distilbert-base",
-                "name": "DistilBERT SST-2 (classification)",
-                "hf_name": "distilbert/distilbert-base-uncased-finetuned-sst-2-english",
-                "task": "text-classification",
+            "flan-t5-large": {
+                "id": "flan-t5-large",
+                "name": "FLAN-T5 Large (instruction following)",
+                "hf_name": "google/flan-t5-large",
+                "task": "text-generation",
             },
-            "legal-bert": {
-                "id": "legal-bert",
-                "name": "FinBERT (classification)",
-                "hf_name": "ProsusAI/finbert",
-                "task": "text-classification",
+            "qwen2.5-0.5b-instruct": {
+                "id": "qwen2.5-0.5b-instruct",
+                "name": "Qwen2.5 0.5B Instruct (chat)",
+                "hf_name": "Qwen/Qwen2.5-0.5B-Instruct",
+                "task": "text-generation",
             },
             "gpt2-small": {
                 "id": "gpt2-small",
@@ -46,7 +46,7 @@ class PromptLabService:
                 "task": "text-generation",
             },
         }
-        self._current_model_id: str = "distilbert-base"
+        self._current_model_id: str = "flan-t5-large"
 
         self._prompts: Dict[str, str] = {
             "amb-basic": (
@@ -73,6 +73,7 @@ class PromptLabService:
         }
 
         self._cache: Dict[str, Dict[str, Any]] = {}
+        self._hf_clients: Dict[str, InferenceClient] = {}
         self._last_hf_error: Optional[str] = None
 
     # ---------- model management ----------
@@ -108,14 +109,27 @@ class PromptLabService:
         return self._prompts[prompt_id]
 
     # ---------- inference on HF ----------
-    def _get_hf_client(self) -> InferenceClient:
-        hf_token = os.environ.get("HF_API_TOKEN")
-        if not hf_token:
+    def _resolve_hf_token(self) -> str:
+        token = (
+            os.environ.get("HF_API_TOKEN")
+            or os.environ.get("HF_TOKEN")
+            or os.environ.get("HUGGINGFACEHUB_API_TOKEN")
+            or get_token()
+        )
+        if not token:
             raise RuntimeError(
-                "HF_API_TOKEN is not set in environment. "
-                "Please set it in Render Dashboard > Environment Variables."
+                "Hugging Face access token not set. "
+                "Please configure HF_API_TOKEN (or HF_TOKEN / HUGGINGFACEHUB_API_TOKEN)."
             )
-        return InferenceClient(token=hf_token, timeout=90)
+        return token.strip()
+
+    def _get_hf_client(self, repo: str) -> InferenceClient:
+        client = self._hf_clients.get(repo)
+        if client is None:
+            token = self._resolve_hf_token()
+            client = InferenceClient(model=repo, token=token, timeout=90)
+            self._hf_clients[repo] = client
+        return client
 
     def _run_remote_model(self, model_id: str, text: str) -> Optional[Dict[str, Any]]:
         self._last_hf_error = None
@@ -126,7 +140,7 @@ class PromptLabService:
         cfg = self._models[model_id]
 
         try:
-            client = self._get_hf_client()
+            client = self._get_hf_client(repo)
         except Exception as e:
             self._last_hf_error = f"client_init: {e}"
             return None
@@ -145,17 +159,17 @@ class PromptLabService:
                 if task == "text-generation":
                     out = client.text_generation(
                         prompt=text,
-                        model=repo,
                         max_new_tokens=96,
                         temperature=0.2,
                         do_sample=False,
                         return_full_text=False,
+                        wait_for_model=True,
                     )
                     data = [{"generated_text": out}]
                 else:
                     data = client.text_classification(
                         text=text,
-                        model=repo,
+                        wait_for_model=True,
                     )
                 return self._normalize_hf_output(cfg, data)
 
