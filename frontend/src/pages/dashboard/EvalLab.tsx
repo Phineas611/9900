@@ -23,7 +23,14 @@ const RUBRIC_KEYS = [
   'correctness',
   'clarity',
 ] as const;
-
+const JUDGE_LABEL_MAP: Record<string, string> = {
+ 'judge-mini-a': 'judge-a-llama-3.1-8b-instant',
+ 'judge-mini-b': 'judge-b-prometheus-7b-v2.0',
+ 'judge-mini-c': 'judge-c-llama-3.3-70b-versatile',
+ 'groq/llama-3.1-8b-instant': 'judge-a-llama-3.1-8b-instant',
+ 'hf/prometheus-7b-v2.0': 'judge-b-prometheus-7b-v2.0',
+ 'groq/llama-3.3-70b-versatile': 'judge-c-llama-3.3-70b-versatile',
+};
 export default function EvalLab() {
   const [config, setConfig] = useState<EvalConfig | null>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -40,19 +47,22 @@ export default function EvalLab() {
   const [isDragOver, setIsDragOver] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
 
-  useEffect(() => {
+
+useEffect(() => {
     getConfig()
       .then((cfg) => {
-        setConfig(cfg);
-        const initial = Object.fromEntries(
+     
+        const mappedJudges = cfg.judges.map((j) => ({ ...j, label: JUDGE_LABEL_MAP[j.id] ?? j.label }));
+        setConfig({ ...cfg, judges: mappedJudges });
+
+       const initial = Object.fromEntries(
           (cfg.default_rubrics?.length ? cfg.default_rubrics : RUBRIC_KEYS).map((k) => [k, true])
-        );
+       );
         setRubrics(initial);
-        setSelectedJudges(cfg.judges.map((j) => j.id));
+        setSelectedJudges(mappedJudges.map((j) => j.id));
       })
       .catch((e) => setError(String(e)));
   }, []);
-
   const onUpload = async () => {
     if (!file) return;
     setError(null);
