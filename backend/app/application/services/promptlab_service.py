@@ -370,6 +370,7 @@ class PromptLabService:
         sentence: str,
         label: str,
         rationale: str,
+        score: float,
         auto_commit: bool = True,
     ) -> Optional[int]:
         """
@@ -409,10 +410,7 @@ class PromptLabService:
         row.label = label
         row.is_ambiguous = (label == "AMBIGUOUS")
         row.explanation = rationale
-
-        extracted_score = self._extract_score_from_rationale(rationale)
-        row.clarity_score = extracted_score if extracted_score is not None else 0.9
-
+        row.clarity_score = score
         row.updated_at = datetime.now(timezone.utc)
 
         db.add(row)
@@ -441,7 +439,7 @@ class PromptLabService:
 
         for s in sentences:
             inf = self._run_inference(s, prompt)
-            sid = self._persist_result(db, user_id, contract_id, s, inf["label"], inf["rationale"])
+            sid = self._persist_result(db, user_id, contract_id, s, inf["label"], inf["rationale"], inf["score"])
             res.append(
                 ClassifyResult(
                     sentence=s,
@@ -470,7 +468,7 @@ class PromptLabService:
         prompt = self._get_prompt(prompt_id, custom_prompt)
         model = self.get_current_model()
         inf = self._run_inference(sentence, prompt)
-        sid = self._persist_result(db, user_id, contract_id, sentence, inf["label"], inf["rationale"])
+        sid = self._persist_result(db, user_id, contract_id, sentence, inf["label"], inf["rationale"], inf["score"])
         return ExplainResult(
             sentence=sentence,
             label=inf["label"],
@@ -525,6 +523,7 @@ class PromptLabService:
                         s,
                         inf["label"],
                         inf["rationale"],
+                        inf["score"],
                         auto_commit=False,
                     )
                     out.append(
