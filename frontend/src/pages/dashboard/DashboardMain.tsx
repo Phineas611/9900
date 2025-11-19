@@ -241,7 +241,7 @@ const DashboardMain = () => {
 
           <div className="stat-card">
             <div className="stat-header">
-              <div className="stat-title">Ambiguous Sentences</div>
+              <div className="stat-title">Total Sentences</div>
               <div className="stat-icon"></div>
             </div>
             <div className="stat-value">{stats.certificatesGenerated}</div>
