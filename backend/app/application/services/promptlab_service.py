@@ -1,5 +1,7 @@
 import os
 import re
+import json
+import time  # NEW: used to throttle HF request rate
 from typing import List, Optional, Dict, Any, Callable
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
@@ -32,52 +34,70 @@ class PromptLabService:
         All configured models are generic NLI-type classifiers (not sentiment-specific).
         """
         self._models: Dict[str, Dict[str, Any]] = {
-            "deberta-base-mnli": {
-                "id": "deberta-base-mnli",
-                "name": "DeBERTa Base MNLI (classification)",
-                "hf_name": "microsoft/deberta-base-mnli",
-                "task": "text-classification",
+            "llama3-8ba_instruct-hf": {
+                "id": "llama3-8ba_instruct-hf",
+                "name": "Llama3 8B Instruct (HF)",
+                "hf_name": "meta-llama/Meta-Llama-3-8B-Instruct",
+                "task": "chat-completion",
             },
-            "roberta-large-mnli": {
-                "id": "roberta-large-mnli",
-                "name": "RoBERTa Large MNLI (classification)",
-                "hf_name": "FacebookAI/roberta-large-mnli",
-                "task": "text-classification",
+            "llama3-70ba_instruct-hf": {
+                "id": "llama3-70ba_instruct-hf",
+                "name": "Llama3 70B Instruct (HF)",
+                "hf_name": "meta-llama/Meta-Llama-3-70B-Instruct",
+                "task": "chat-completion",
             },
-            "deberta-large-mnli": {
-                "id": "deberta-large-mnli",
-                "name": "DeBERTa Large MNLI (classification)",
-                "hf_name": "microsoft/deberta-large-mnli",
-                "task": "text-classification",
+            "qwen3-8b": {
+                "id": "qwen3-8b",
+                "name": "Qwen3 8B (HF)",
+                "hf_name": "Qwen/Qwen3-8B",
+                "task": "chat-completion",
             },
         }
 
-        # Default model: light-weight DeBERTa base MNLI.
-        self._current_model_id: str = "deberta-base-mnli"
+        # Default model: light-weight Groq 8B chat
+        self._current_model_id: str = "llama3-8ba_instruct-hf"
 
         # ----------------- prompt templates -----------------
         self._prompts: Dict[str, str] = {
             "amb-basic": (
-                "Classify the following contract clause as AMBIGUOUS or UNAMBIGUOUS, "
-                "then briefly explain why.\nClause: {clause}\nOutput:"
+                "You are a legal AI assistant. \n"
+                "Task: Classify the following contract clause as 'Ambiguous' or 'Unambiguous' and provide a rationale.\n\n"
+                "Definitions:\n"
+                "- Ambiguous: Uses subjective terms (e.g., 'reasonable', 'promptly', 'satisfactory', 'materially') or lacks specific metrics.\n"
+                "- Unambiguous: Uses specific numbers, dates, percentages, or objective standards (e.g., '14 days', '$5,000').\n\n"
+                "Clause: \"{clause}\"\n\n"
+                "Output Format:\n"
+                "Classification: [Ambiguous/Unambiguous]\n"
+                "Rationale: [One sentence explanation]"
             ),
             "amb-strict": (
-                "You are a contract ambiguity checker. If multiple reasonable meanings exist, "
-                "return AMBIGUOUS, else UNAMBIGUOUS. Provide a short reason.\nClause: {clause}\n"
-            ),
-            "amb-layman": (
-                "Explain for a non-lawyer whether this clause is ambiguous. "
-                "First say 'Ambiguous' or 'Not Ambiguous', then give a short explanation.\n"
-                "Clause: {clause}\n"
+                "Role: Strict Contract Auditor.\n"
+                "Instruction: If a clause leaves ANY room for interpretation, it is Ambiguous. Identify vague keywords.\n\n"
+                "Vague Keywords to watch: reasonable, best efforts, appropriate, substantial, undue.\n\n"
+                "Clause: \"{clause}\"\n\n"
+                "Verdict (Ambiguous/Unambiguous): \n"
+                "Reason: "
             ),
             "amb-risky": (
-                "If the clause leaves room for interpretation (actors/times/amounts/conditions), "
-                "mark AMBIGUOUS and justify briefly.\nClause: {clause}\n"
+                "Analyze the legal risk of this clause.\n"
+                "Clause: \"{clause}\"\n\n"
+                "If the clause is vague, it poses a High Risk (Ambiguous). If it is specific, it poses a Low Risk (Unambiguous).\n"
+                "Provide your classification and explain the specific risk or clarity."
+            ),
+            "amb-layman": (
+                "Explain to a non-lawyer if this contract sentence is clear or confusing.\n"
+                "Clause: \"{clause}\"\n\n"
+                "1. Is there a specific number or date? (Yes/No)\n"
+                "2. Final Tag: Ambiguous or Unambiguous.\n"
+                "3. Simple Explanation."
             ),
             "amb-short": (
-                "Is this clause ambiguous? Answer AMBIGUOUS or UNAMBIGUOUS, then one-sentence reason.\n"
-                "Clause: {clause}\n"
-            ),
+                "Binary Classification Task.\n"
+                "Input Text: \"{clause}\"\n"
+                "Categories: [Ambiguous, Unambiguous]\n"
+                "Subjective words = Ambiguous. Objective numbers = Unambiguous.\n\n"
+                "Response:"
+            )
         }
 
         # Optional: simple in-memory cache (currently unused).
@@ -158,6 +178,47 @@ class PromptLabService:
             return None
 
         cfg = self._models[model_id]
+        task = cfg.get("task", "text-classification")
+        repo = cfg["hf_name"]
+
+        if task == "groq-chat":
+            api_key = os.getenv("GROQ_API_KEY")
+            if not api_key:
+                self._last_hf_error = "missing GROQ_API_KEY"
+                return None
+            import requests, time as _time
+            headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+            req = {
+                "model": repo,
+                "messages": [
+                    {"role": "system", "content": "Answer AMBIGUOUS or UNAMBIGUOUS then a brief reason."},
+                    {"role": "user", "content": text},
+                ],
+                "temperature": 0.0,
+                "max_tokens": 256,
+            }
+            delays = [0, 2, 5, 10]
+            last_err = None
+            for attempt, d in enumerate(delays, start=1):
+                if d:
+                    _time.sleep(d)
+                try:
+                    resp = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=req, timeout=60)
+                    if resp.status_code == 200:
+                        j = resp.json()
+                        choices = j.get("choices") or []
+                        msg = (choices[0] or {}).get("message", {}) if choices else {}
+                        content = msg.get("content") or ""
+                        return self._normalize_hf_output(cfg, [{"generated_text": content}])
+                    last_err = f"groq_http_{resp.status_code}: {resp.text[:200]}"
+                    if resp.status_code in (429, 500, 502, 503):
+                        continue
+                    break
+                except Exception as e:
+                    last_err = f"groq_error: {str(e)[:200]}"
+                    break
+            self._last_hf_error = last_err or "unknown_groq_error"
+            return None
 
         try:
             client = self._get_hf_client()
@@ -165,17 +226,14 @@ class PromptLabService:
             self._last_hf_error = f"client_init: {e}"
             return None
 
-        task = cfg.get("task", "text-classification")
-        repo = cfg["hf_name"]
-
-        import time
+        import time as _time
         # Exponential backoff, up to ~1 minute total.
         delays = [0, 2, 4, 8, 16, 32]
         last_err = None
 
         for attempt, delay in enumerate(delays, start=1):
             if delay:
-                time.sleep(delay)
+                _time.sleep(delay)
 
             try:
                 if task == "text-generation":
@@ -189,6 +247,19 @@ class PromptLabService:
                         return_full_text=False,
                     )
                     data = [{"generated_text": out}]
+                elif task == "chat-completion":
+                    out = client.chat_completion(
+                        model=repo,
+                        messages=[
+                            {"role": "system", "content": "Answer AMBIGUOUS or UNAMBIGUOUS then a brief reason."},
+                            {"role": "user", "content": text},
+                        ],
+                    )
+                    try:
+                        content = out["choices"][0]["message"]["content"]
+                    except Exception:
+                        content = str(out)
+                    data = [{"generated_text": content}]
                 else:
                     # Main path: generic text-classification call.
                     data = client.text_classification(
@@ -230,8 +301,8 @@ class PromptLabService:
         """
         task = cfg.get("task", "text-classification")
 
-        # ----- Fallback: generation-style output (currently unused) -----
-        if task == "text-generation":
+        # ----- Generation-style output -----
+        if task in ("text-generation", "chat-completion", "groq-chat"):
             if isinstance(data, list) and data and "generated_text" in data[0]:
                 text = str(data[0]["generated_text"])
                 up = text.upper()
@@ -308,6 +379,105 @@ class PromptLabService:
             "score": 0.5,
         }
 
+    def _run_batch_chat(self, model_id: str, sentences: List[str], prompt: str) -> Optional[List[Dict[str, Any]]]:
+        self._last_hf_error = None
+        if model_id not in self._models:
+            self._last_hf_error = f"Unknown model_id: {model_id}"
+            return None
+        cfg = self._models[model_id]
+        task = cfg.get("task", "text-classification")
+        if task not in ("chat-completion", "groq-chat", "text-generation"):
+            return None
+        repo = cfg["hf_name"]
+
+        items = [{"id": i + 1, "sentence": s} for i, s in enumerate(sentences)]
+        sys_msg = (
+            "Return only strict JSON array. Each element must have keys: sentence, label, rationale. "
+            "label must be AMBIGUOUS or UNAMBIGUOUS. No extra text."
+        )
+        user_msg = json.dumps({
+            "instruction": prompt,
+            "items": items,
+        }, ensure_ascii=False)
+
+        try:
+            if task == "groq-chat":
+                api_key = os.getenv("GROQ_API_KEY")
+                if not api_key:
+                    self._last_hf_error = "missing GROQ_API_KEY"
+                    return None
+                import requests
+                headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+                req = {
+                    "model": repo,
+                    "messages": [
+                        {"role": "system", "content": sys_msg},
+                        {"role": "user", "content": user_msg},
+                    ],
+                    "temperature": 0.0,
+                    "max_tokens": 2048,
+                }
+                resp = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=req, timeout=90)
+                if resp.status_code != 200:
+                    self._last_hf_error = f"groq_http_{resp.status_code}: {resp.text[:200]}"
+                    return None
+                j = resp.json()
+                choices = j.get("choices") or []
+                msg = (choices[0] or {}).get("message", {}) if choices else {}
+                content = msg.get("content") or ""
+            else:
+                client = self._get_hf_client()
+                out = client.chat_completion(
+                    model=repo,
+                    messages=[
+                        {"role": "system", "content": sys_msg},
+                        {"role": "user", "content": user_msg},
+                    ],
+                )
+                try:
+                    content = out["choices"][0]["message"]["content"]
+                except Exception:
+                    content = str(out)
+
+            try:
+                parsed = json.loads(content)
+            except Exception:
+                try:
+                    import re as _re
+                    m = _re.search(r"\[\s*\{[\s\S]*\}\s*\]", content)
+                    if m:
+                        parsed = json.loads(m.group(0))
+                    else:
+                        return None
+                except Exception:
+                    return None
+
+            if not isinstance(parsed, list) or len(parsed) != len(sentences):
+                return None
+
+            out_list: List[Dict[str, Any]] = []
+            for i, it in enumerate(parsed):
+                sent = sentences[i]
+                lbl = str(it.get("label", "AMBIGUOUS")).upper()
+                if "UNAMBIGUOUS" in lbl or "NOT AMBIGUOUS" in lbl:
+                    lbl = "UNAMBIGUOUS"
+                elif "AMBIGUOUS" in lbl:
+                    lbl = "AMBIGUOUS"
+                else:
+                    lbl = "AMBIGUOUS"
+                rat = str(it.get("rationale", "")).strip()
+                score = self._extract_score_from_rationale(rat) or 0.9
+                out_list.append({
+                    "sentence": sent,
+                    "label": lbl,
+                    "rationale": rat,
+                    "score": float(score),
+                })
+            return out_list
+        except Exception as e:
+            self._last_hf_error = str(e)[:200]
+            return None
+
     def _run_inference(self, sentence: str, prompt: str) -> Dict[str, Any]:
         """
         High-level inference wrapper.
@@ -329,12 +499,14 @@ class PromptLabService:
                 text = f"{prompt}\nClause: {sentence}\n"
 
         out = self._run_remote_model(model["id"], text)
+        # 不再 fallback 到不存在的其他模型；如果主模型调用失败，就直接报错并在上层标记为 ERROR。
         if not out:
             hint = f" Last HF error: {self._last_hf_error}" if self._last_hf_error else ""
             raise RuntimeError(
                 f"Hugging Face model unavailable. "
                 f"Check HF_API_TOKEN / HF_TOKEN, network, and model id '{model['hf_name']}'.{hint}"
             )
+
         out["rationale"] = "[HF] " + str(out.get("rationale", "")).lstrip()
         return out
 
@@ -437,7 +609,7 @@ class PromptLabService:
         model = self.get_current_model()
         res: List[ClassifyResult] = []
 
-        for s in sentences:
+        for idx, s in enumerate(sentences):
             inf = self._run_inference(s, prompt)
             sid = self._persist_result(db, user_id, contract_id, s, inf["label"], inf["rationale"], inf["score"])
             res.append(
@@ -451,6 +623,9 @@ class PromptLabService:
                     sentence_id=sid,
                 )
             )
+            # 新增：为单条分类也加一点点间隔，降低速率
+            time.sleep(0.5)
+
         return res
 
     def explain_one(
@@ -489,9 +664,9 @@ class PromptLabService:
         progress_callback: Optional[Callable[[int, int], None]] = None,
     ) -> List[ExplainResult]:
         """
-        Explain ambiguity for a batch of sentences, committing in batches
-        for robustness and logging progress as we go.
-        """
+            Explain ambiguity for a batch of sentences, committing in batches
+            for robustness and logging progress as we go.
+            """
         import logging
 
         logger = logging.getLogger(__name__)
@@ -503,7 +678,7 @@ class PromptLabService:
 
         logger.info(f"[PromptLab] Starting batch processing: {total} sentences, contract_id={contract_id}")
 
-        BATCH_SIZE = 10
+        BATCH_SIZE = 50
         for i in range(0, len(sentences), BATCH_SIZE):
             batch = sentences[i : i + BATCH_SIZE]
             batch_num = i // BATCH_SIZE + 1
@@ -513,43 +688,77 @@ class PromptLabService:
                 f"({i+1}-{min(i+BATCH_SIZE, total)}/{total})"
             )
 
-            for idx_in_batch, s in enumerate(batch):
-                try:
-                    inf = self._run_inference(s, prompt)
-                    sid = self._persist_result(
-                        db,
-                        user_id,
-                        contract_id,
-                        s,
-                        inf["label"],
-                        inf["rationale"],
-                        inf["score"],
-                        auto_commit=False,
-                    )
-                    out.append(
-                        ExplainResult(
-                            sentence=s,
-                            label=inf["label"],
-                            rationale=inf["rationale"],
-                            model_id=model["id"],
-                            contract_id=contract_id,
-                            sentence_id=sid,
+            used_batch_chat = False
+            try:
+                if model.get("task") == "chat-completion":
+                    batch_inf = self._run_batch_chat(model["id"], batch, prompt)
+                    if batch_inf:
+                        used_batch_chat = True
+                        for idx_in_batch, inf in enumerate(batch_inf):
+                            s = batch[idx_in_batch]
+                            sid = self._persist_result(
+                                db,
+                                user_id,
+                                contract_id,
+                                s,
+                                inf["label"],
+                                inf["rationale"],
+                                inf.get("score", 0.9),
+                                auto_commit=False,
+                            )
+                            out.append(
+                                ExplainResult(
+                                    sentence=s,
+                                    label=inf["label"],
+                                    rationale=inf["rationale"],
+                                    model_id=model["id"],
+                                    contract_id=contract_id,
+                                    sentence_id=sid,
+                                )
+                            )
+            except Exception as e:
+                logger.error(f"[PromptLab] Batch chat failed: {str(e)[:200]}")
+
+            if not used_batch_chat:
+                for idx_in_batch, s in enumerate(batch):
+                    try:
+                        inf = self._run_inference(s, prompt)
+                        sid = self._persist_result(
+                            db,
+                            user_id,
+                            contract_id,
+                            s,
+                            inf["label"],
+                            inf["rationale"],
+                            inf["score"],
+                            auto_commit=False,
                         )
-                    )
-                except Exception as e:
-                    logger.error(
-                        f"[PromptLab] Failed to process sentence {i+idx_in_batch+1}/{total}: {str(e)[:200]}"
-                    )
-                    out.append(
-                        ExplainResult(
-                            sentence=s,
-                            label="ERROR",
-                            rationale=f"Processing error: {str(e)[:200]}",
-                            model_id=model["id"],
-                            contract_id=contract_id,
-                            sentence_id=None,
+                        out.append(
+                            ExplainResult(
+                                sentence=s,
+                                label=inf["label"],
+                                rationale=inf["rationale"],
+                                model_id=model["id"],
+                                contract_id=contract_id,
+                                sentence_id=sid,
+                            )
                         )
-                    )
+                    except Exception as e:
+                        logger.error(
+                            f"[PromptLab] Failed to process sentence {i+idx_in_batch+1}/{total}: {str(e)[:200]}"
+                        )
+                        out.append(
+                            ExplainResult(
+                                sentence=s,
+                                label="ERROR",
+                                rationale=f"Processing error: {str(e)[:200]}",
+                                model_id=model["id"],
+                                contract_id=contract_id,
+                                sentence_id=None,
+                            )
+                        )
+
+                    time.sleep(0.5)
 
             try:
                 db.commit()
