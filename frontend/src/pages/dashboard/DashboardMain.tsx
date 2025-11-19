@@ -263,17 +263,6 @@ const DashboardMain = () => {
             </div>
           </div>
 
-          <div className="stat-card">
-            <div className="stat-header">
-              <div className="stat-title">Processing Time</div>
-              <div className="stat-icon"></div>
-            </div>
-            <div className="stat-value">{stats.averageTime} min</div>
-            <div className="stat-label">Average analysis time</div>
-            <div className={`stat-change ${stats.timeChange >= 0 ? 'positive' : 'negative'}`}>
-              {stats.timeChange >= 0 ? '+' : ''}{stats.timeChange}% from last month
-            </div>
-          </div>
         </div>
       )}
 
