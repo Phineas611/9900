@@ -1,6 +1,6 @@
 import os
 import uuid
-import io
+import io, json
 import asyncio
 from pathlib import Path
 from typing import List, Optional, Dict
@@ -29,6 +29,7 @@ from app.application.services.evaluation_service import EvaluationService
 from app.database.models.evaluation_run import EvaluationRun
 from app.database.models.evaluation_item import EvaluationItem
 from app.database.models.evaluation_aggregate import EvaluationAggregate
+from app.database.models.evaluation_judgment import EvaluationJudgment
 
 
 router = APIRouter(prefix="/eval-lab", tags=["Evaluation Lab"])
@@ -113,6 +114,19 @@ async def _run_in_background(job_id: str, run_id: str, assess_req: AssessRequest
         # Judges/rubrics/custom already set on job at submission time
         # Compute totals and fill records
         pairs, _ = repo.list_results(db, run_id, page=1, page_size=10**9)
+
+        # --- BEGIN OPTIMIZATION ---
+        # Pre-fetch all judgments for the run to avoid N+1 queries
+        from collections import defaultdict
+        from app.database.models.evaluation_judgment import EvaluationJudgment
+        all_judgments_query = select(EvaluationJudgment).where(EvaluationJudgment.run_id == run_id)
+        all_judgments_results = db.execute(all_judgments_query).scalars().all()
+        
+        judgments_by_item_pk = defaultdict(list)
+        for j in all_judgments_results:
+            judgments_by_item_pk[j.item_pk].append(j)
+        # --- END OPTIMIZATION ---
+
         total = 0
         finished = 0
         class_ok_total = 0
@@ -120,7 +134,7 @@ async def _run_in_background(job_id: str, run_id: str, assess_req: AssessRequest
 
         for item, agg in pairs:
             total += 1
-            js = repo.list_judgments_for_item(db, run_id, item.id)
+            js = judgments_by_item_pk.get(item.id, [])
             judges_list = []
             class_votes = []
             rationale_votes = []
@@ -423,6 +437,17 @@ def job_state(job_id: str, db: Session = Depends(get_db)):
         elif status == "failed":
             message = "Failed"
 
+    try:
+        if progress_obj and int(progress_obj.get("total") or 0) > 0:
+            cur = int(progress_obj.get("current") or 0)
+            tot = int(progress_obj.get("total") or 0)
+            if cur >= tot:
+                status = "completed"
+                if message is None or message.lower() != "completed":
+                    message = "Completed"
+    except Exception:
+        pass
+
     return {
         "task_id": job_id,
         "status": status,
@@ -581,3 +606,64 @@ def export_xlsx(job_id: str, db: Session = Depends(get_db)):
     return StreamingResponse(b, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={
         "Content-Disposition": f"attachment; filename=eval_{job_id}.xlsx"
     })
+
+
+def hf_raw_stats(run_id: str, judge_id: str, sample_limit: int = Query(5, ge=1, le=50), db: Session = Depends(get_db)):
+    rows = db.execute(
+        select(EvaluationJudgment).where((EvaluationJudgment.run_id == run_id) & (EvaluationJudgment.judge_model == judge_id))
+    ).scalars().all()
+    required = ["grammar","word_choice","cohesion","conciseness","completeness","correctness","clarity"]
+    total = len(rows)
+    raw_total = 0
+    missing = 0
+    complete = 0
+    neg = {k: 0 for k in required}
+    denom = {k: 0 for k in required}
+    samples = []
+    for j in rows[:sample_limit]:
+        raw = j.raw or {}
+        txt = None
+        if isinstance(raw, list) and raw:
+            v0 = raw[0] or {}
+            txt = v0.get("generated_text")
+        elif isinstance(raw, dict):
+            txt = raw.get("generated_text")
+        parsed = None
+        if isinstance(txt, str):
+            raw_total += 1
+            try:
+                parsed = json.loads(txt)
+            except Exception:
+                parsed = None
+        if parsed is None and not isinstance(txt, str):
+            obj = j.verdict or {}
+            rub = (obj.get("rubric") or {})
+            missdims = []
+        else:
+            obj = parsed if parsed else {}
+            rub = (obj.get("rubric") or {})
+            missdims = [k for k in required if k not in rub]
+        if missdims:
+            missing += 1
+        elif rub:
+            complete += 1
+            for k in required:
+                leaf = (rub.get(k) or {})
+                v = leaf.get("pass")
+                if isinstance(v, bool):
+                    denom[k] += 1
+                    if not v:
+                        neg[k] += 1
+        samples.append({"item_pk": j.item_pk, "generated_text": (txt[:300] if isinstance(txt, str) else None), "missing_dims": missdims})
+    rates = {k: (neg[k] / denom[k] if denom[k] else None) for k in required}
+    return {
+        "run_id": run_id,
+        "judge_id": judge_id,
+        "total": total,
+        "raw_count": raw_total,
+        "missing_key_count": missing,
+        "missing_key_rate": (missing / raw_total if raw_total else None),
+        "complete_count": complete,
+        "true_negative_rate_by_dim": rates,
+        "samples": samples,
+    }

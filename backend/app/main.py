@@ -14,7 +14,7 @@ logging.basicConfig(
 )
 
 # load .env from backend/.env
-load_dotenv(dotenv_path=Path(__file__).resolve().parents[1] / ".env")
+load_dotenv(dotenv_path=Path(__file__).resolve().parents[1] / ".env", override=True)
 
 # existing routers
 from app.presentation.routes.healthcheck import router as health_router

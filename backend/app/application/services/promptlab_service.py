@@ -1,7 +1,6 @@
 import os
 import re
 import json
-import time  # NEW: used to throttle HF request rate
 from typing import List, Optional, Dict, Any, Callable
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
@@ -46,58 +45,66 @@ class PromptLabService:
                 "hf_name": "meta-llama/Meta-Llama-3-70B-Instruct",
                 "task": "chat-completion",
             },
-            "qwen3-8b": {
-                "id": "qwen3-8b",
-                "name": "Qwen3 8B (HF)",
-                "hf_name": "Qwen/Qwen3-8B",
+            "mixtral-8x7ba_instruct-hf": {
+                "id": "mixtral-8x7ba_instruct-hf",
+                "name": "Mixtral 8x7B Instruct (HF)",
+                "hf_name": "mistralai/Mixtral-8x7B-Instruct-v0.1",
                 "task": "chat-completion",
             },
+            "deberta-base-mnli": {
+                "id": "deberta-base-mnli",
+                "name": "DeBERTa Base MNLI (classification)",
+                "hf_name": "microsoft/deberta-base-mnli",
+                "task": "text-classification",
+            },
+            "roberta-large-mnli": {
+                "id": "roberta-large-mnli",
+                "name": "RoBERTa Large MNLI (classification)",
+                "hf_name": "FacebookAI/roberta-large-mnli",
+                "task": "text-classification",
+            },
+            "mistral-7b-instruct": {
+                "id": "mistral-7b-instruct",
+                "name": "Mistral-7B Instruct (generation)",
+                "hf_name": "mistralai/Mistral-7B-Instruct-v0.3",
+                "task": "chat-completion",
+            },
+            "qwen2.5-7b-instruct": {
+                "id": "qwen2.5-7b-instruct",
+                "name": "Qwen2.5-7B Instruct (generation)",
+                "hf_name": "Qwen/Qwen2.5-7B-Instruct",
+                "task": "chat-completion",
+            },
+            
+
         }
 
         # Default model: light-weight Groq 8B chat
-        self._current_model_id: str = "llama3-8ba_instruct-hf"
+        self._current_model_id: str = "qwen2.5-7b-instruct"
 
         # ----------------- prompt templates -----------------
         self._prompts: Dict[str, str] = {
             "amb-basic": (
-                "You are a legal AI assistant. \n"
-                "Task: Classify the following contract clause as 'Ambiguous' or 'Unambiguous' and provide a rationale.\n\n"
-                "Definitions:\n"
-                "- Ambiguous: Uses subjective terms (e.g., 'reasonable', 'promptly', 'satisfactory', 'materially') or lacks specific metrics.\n"
-                "- Unambiguous: Uses specific numbers, dates, percentages, or objective standards (e.g., '14 days', '$5,000').\n\n"
-                "Clause: \"{clause}\"\n\n"
-                "Output Format:\n"
-                "Classification: [Ambiguous/Unambiguous]\n"
-                "Rationale: [One sentence explanation]"
+                "Classify the following contract clause as AMBIGUOUS or UNAMBIGUOUS, "
+                "then briefly explain why.\nClause: {clause}\nOutput:"
             ),
             "amb-strict": (
-                "Role: Strict Contract Auditor.\n"
-                "Instruction: If a clause leaves ANY room for interpretation, it is Ambiguous. Identify vague keywords.\n\n"
-                "Vague Keywords to watch: reasonable, best efforts, appropriate, substantial, undue.\n\n"
-                "Clause: \"{clause}\"\n\n"
-                "Verdict (Ambiguous/Unambiguous): \n"
-                "Reason: "
-            ),
-            "amb-risky": (
-                "Analyze the legal risk of this clause.\n"
-                "Clause: \"{clause}\"\n\n"
-                "If the clause is vague, it poses a High Risk (Ambiguous). If it is specific, it poses a Low Risk (Unambiguous).\n"
-                "Provide your classification and explain the specific risk or clarity."
+                "You are a contract ambiguity checker. If multiple reasonable meanings exist, "
+                "return AMBIGUOUS, else UNAMBIGUOUS. Provide a short reason.\nClause: {clause}\n"
             ),
             "amb-layman": (
-                "Explain to a non-lawyer if this contract sentence is clear or confusing.\n"
-                "Clause: \"{clause}\"\n\n"
-                "1. Is there a specific number or date? (Yes/No)\n"
-                "2. Final Tag: Ambiguous or Unambiguous.\n"
-                "3. Simple Explanation."
+                "Explain for a non-lawyer whether this clause is ambiguous. "
+                "First say 'Ambiguous' or 'Not Ambiguous', then give a short explanation.\n"
+                "Clause: {clause}\n"
+            ),
+            "amb-risky": (
+                "If the clause leaves room for interpretation (actors/times/amounts/conditions), "
+                "mark AMBIGUOUS and justify briefly.\nClause: {clause}\n"
             ),
             "amb-short": (
-                "Binary Classification Task.\n"
-                "Input Text: \"{clause}\"\n"
-                "Categories: [Ambiguous, Unambiguous]\n"
-                "Subjective words = Ambiguous. Objective numbers = Unambiguous.\n\n"
-                "Response:"
-            )
+                "Is this clause ambiguous? Answer AMBIGUOUS or UNAMBIGUOUS, then one-sentence reason.\n"
+                "Clause: {clause}\n"
+            ),
         }
 
         # Optional: simple in-memory cache (currently unused).
@@ -186,7 +193,7 @@ class PromptLabService:
             if not api_key:
                 self._last_hf_error = "missing GROQ_API_KEY"
                 return None
-            import requests, time as _time
+            import requests, time
             headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
             req = {
                 "model": repo,
@@ -201,7 +208,7 @@ class PromptLabService:
             last_err = None
             for attempt, d in enumerate(delays, start=1):
                 if d:
-                    _time.sleep(d)
+                    time.sleep(d)
                 try:
                     resp = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=req, timeout=60)
                     if resp.status_code == 200:
@@ -226,14 +233,14 @@ class PromptLabService:
             self._last_hf_error = f"client_init: {e}"
             return None
 
-        import time as _time
+        import time
         # Exponential backoff, up to ~1 minute total.
         delays = [0, 2, 4, 8, 16, 32]
         last_err = None
 
         for attempt, delay in enumerate(delays, start=1):
             if delay:
-                _time.sleep(delay)
+                time.sleep(delay)
 
             try:
                 if task == "text-generation":
@@ -499,14 +506,18 @@ class PromptLabService:
                 text = f"{prompt}\nClause: {sentence}\n"
 
         out = self._run_remote_model(model["id"], text)
-        # 不再 fallback 到不存在的其他模型；如果主模型调用失败，就直接报错并在上层标记为 ERROR。
         if not out:
-            hint = f" Last HF error: {self._last_hf_error}" if self._last_hf_error else ""
-            raise RuntimeError(
-                f"Hugging Face model unavailable. "
-                f"Check HF_API_TOKEN / HF_TOKEN, network, and model id '{model['hf_name']}'.{hint}"
-            )
-
+            fb_id = "deberta-base-mnli"
+            try:
+                out = self._run_remote_model(fb_id, sentence)
+            except Exception:
+                out = None
+            if not out:
+                hint = f" Last HF error: {self._last_hf_error}" if self._last_hf_error else ""
+                raise RuntimeError(
+                    f"Hugging Face model unavailable. "
+                    f"Check HF_API_TOKEN / HF_TOKEN, network, and model id '{model['hf_name']}'.{hint}"
+                )
         out["rationale"] = "[HF] " + str(out.get("rationale", "")).lstrip()
         return out
 
@@ -609,7 +620,7 @@ class PromptLabService:
         model = self.get_current_model()
         res: List[ClassifyResult] = []
 
-        for idx, s in enumerate(sentences):
+        for s in sentences:
             inf = self._run_inference(s, prompt)
             sid = self._persist_result(db, user_id, contract_id, s, inf["label"], inf["rationale"], inf["score"])
             res.append(
@@ -623,9 +634,6 @@ class PromptLabService:
                     sentence_id=sid,
                 )
             )
-            # 新增：为单条分类也加一点点间隔，降低速率
-            time.sleep(0.5)
-
         return res
 
     def explain_one(
@@ -664,9 +672,9 @@ class PromptLabService:
         progress_callback: Optional[Callable[[int, int], None]] = None,
     ) -> List[ExplainResult]:
         """
-            Explain ambiguity for a batch of sentences, committing in batches
-            for robustness and logging progress as we go.
-            """
+        Explain ambiguity for a batch of sentences, committing in batches
+        for robustness and logging progress as we go.
+        """
         import logging
 
         logger = logging.getLogger(__name__)
@@ -757,8 +765,6 @@ class PromptLabService:
                                 sentence_id=None,
                             )
                         )
-
-                    time.sleep(0.5)
 
             try:
                 db.commit()

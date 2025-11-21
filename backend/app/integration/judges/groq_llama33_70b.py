@@ -28,14 +28,14 @@ class GroqLlama33_70B_Judge(IJudgeModel):
             "max_tokens": max_tokens,
         }
 
-        # 令牌桶: 预估本次调用的令牌消耗并占用容量，避免撞 TPM
+     
         prompt_text = "\n".join([
             m.get("content", "") for m in req.get("messages", []) if isinstance(m, dict)
         ])
         required_tokens = estimate_tokens_from_text(prompt_text, max_output=max_tokens, extra=64)
         acquire_capacity(req["model"], required_tokens)
 
-        # 节流（最小调用间隔）
+
         global _last_call_ts
         now = time.time()
         wait = max(0.0, _last_call_ts + (min_interval_ms / 1000.0) - now)
@@ -47,7 +47,7 @@ class GroqLlama33_70B_Judge(IJudgeModel):
         last_exc = None
         for attempt in range(max_retries + 1):
             try:
-                # 并发闸：限制 70B 并发，减少 429 触发
+             
                 with enter_concurrency(req["model"]):
                     resp = requests.post(GROQ_URL, headers=headers, json=req, timeout=60)
                 if resp.status_code == 200:
@@ -92,7 +92,7 @@ class GroqLlama33_70B_Judge(IJudgeModel):
         fallback = json.dumps({
             "judge_label": "unambiguous",
             "predicted_class_correct": True,
-            "rubric": {k: {"pass": True, "confidence": 0.5, "notes": "dev-fallback"} for k in
+            "rubric": {k: {"pass": False, "confidence": 0.0, "notes": "dev-fallback"} for k in
                        ["grammar","word_choice","cohesion","conciseness","completeness","correctness","clarity"]},
             "manual": {}
         })

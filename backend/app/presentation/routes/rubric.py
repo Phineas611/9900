@@ -41,7 +41,7 @@ def build_prompt(item: Dict[str, Any], criteria: Dict[str, bool], manual_metrics
         " \"judge_label\": \"ambiguous|unambiguous\", "
         " \"rubric\": { \"<dim>\": { \"pass\": bool, \"confidence\": decimal in [0,1] (2 digits), \"notes\": string } }, "
         " \"manual\": { \"<metric>\": { \"pass\": bool, \"confidence\": decimal in [0,1] (2 digits), \"notes\": string } } "
-        "}. Notes MUST be concise (<= 30 chars)."
+        "}. All listed rubric dimensions MUST be present; if undecidable, set pass=false and confidence=0.0. Notes MUST be concise (<= 30 chars)."
         if require_json else "Return binary decisions."
     )
     return f"""
@@ -79,7 +79,7 @@ def build_batch_prompt(items: List[Dict[str, Any]], criteria: Dict[str, bool], m
         "Return ONLY a JSON array, length == number of items, where each element is: "
         "{ \"judge_label\": \"ambiguous|unambiguous\", \"rubric\": {<dim>: {pass: bool, confidence: decimal in [0,1] (2 digits), notes: string}}, "
         "\"manual\": {<metric>: {pass: bool, confidence: decimal in [0,1] (2 digits), notes: string}} }. "
-        "Notes MUST be concise (<= 30 chars)."
+        "All listed rubric dimensions MUST be present; if undecidable, set pass=false and confidence=0.0. Notes MUST be concise (<= 30 chars)."
         if require_json else "Return binary decisions for each item"
     )
     lines = [

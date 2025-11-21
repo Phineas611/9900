@@ -132,15 +132,15 @@ class EvaluationService:
             "predicted_class_correct": data.get("predicted_class_correct"),
             "rubric": {
                 k: {
-                    "pass": bool((rubric.get(k) or {}).get("pass", True)),
-                    "confidence": _coerce_conf((rubric.get(k) or {}).get("confidence", None)),
+                    "pass": bool((rubric.get(k) or {}).get("pass", False)),
+                    "confidence": _coerce_conf((rubric.get(k) or {}).get("confidence", 0.0)),
                     "notes": str((rubric.get(k) or {}).get("notes", ""))[:30],
                 } for k in dim_keys
             },
             "manual": {
                 m: {
-                    "pass": bool((manual.get(m) or {}).get("pass", True)),
-                    "confidence": _coerce_conf((manual.get(m) or {}).get("confidence", None)),
+                    "pass": bool((manual.get(m) or {}).get("pass", False)),
+                    "confidence": _coerce_conf((manual.get(m) or {}).get("confidence", 0.0)),
                     "notes": str((manual.get(m) or {}).get("notes", ""))[:30],
                 } for m in manual_metrics
             }
@@ -332,24 +332,24 @@ class EvaluationService:
             if not judges:
                 self._logger.warning(f"[eval] No sync judge available for {judge_id}, skipping.")
                 invalid = {"judge_label": None, "predicted_class_correct": None, "rubric": {}, "manual": {}}
-                return {"latency_ms": 0.0, "provider_raw": {}, "verdicts": [invalid for _ in prompts]}
+                return {"latency_ms": 0.0, "provider_raws": [{} for _ in prompts], "verdicts": [invalid for _ in prompts]}
             j = judges[0]
             async def one(p):
-                return await asyncio.to_thread(j.judge, {"prompt": p, "temperature": req.temperature})
+                return await asyncio.to_thread(j.judge, {"prompt": p, "temperature": req.temperature, "require_json": req.require_json})
             t0 = time.time()
             outs = [await one(p) for p in prompts]
-            return {"latency_ms": (time.time()-t0)*1000, "provider_raw": {}, "verdicts": [json.loads(o["json"]) for o in outs]}
+            return {"latency_ms": (time.time()-t0)*1000, "provider_raws": [o.get("provider_raw", {}) for o in outs], "verdicts": [json.loads(o["json"]) for o in outs]}
 
  
         tasks = []
         ids_present: List[str] = []
-        j1_task = self._groq_batch(j1_id, inputs, dim_keys, manual_metrics, req.temperature, req.require_json, client, judge_sem) if _is_groq(j1_id) else run_sync(j1_id, prompts)
+        j1_task = (run_sync(j1_id, prompts) if j1_id.startswith("groq/llama-3.1-8b") else (self._groq_batch(j1_id, inputs, dim_keys, manual_metrics, req.temperature, req.require_json, client, judge_sem) if _is_groq(j1_id) else run_sync(j1_id, prompts)))
         tasks.append(j1_task); ids_present.append(j1_id)
         if j2_id:
-            j2_task = self._groq_batch(j2_id, inputs, dim_keys, manual_metrics, req.temperature, req.require_json, client, judge_sem) if _is_groq(j2_id) else run_sync(j2_id, prompts)
+            j2_task = (run_sync(j2_id, prompts) if j2_id.startswith("groq/llama-3.1-8b") else (self._groq_batch(j2_id, inputs, dim_keys, manual_metrics, req.temperature, req.require_json, client, judge_sem) if _is_groq(j2_id) else run_sync(j2_id, prompts)))
             tasks.append(j2_task); ids_present.append(j2_id)
         if j3_id:
-            j3_task = self._groq_batch(j3_id, inputs, dim_keys, manual_metrics, req.temperature, req.require_json, client, judge_sem) if _is_groq(j3_id) else run_sync(j3_id, prompts)
+            j3_task = (run_sync(j3_id, prompts) if j3_id.startswith("groq/llama-3.1-8b") else (self._groq_batch(j3_id, inputs, dim_keys, manual_metrics, req.temperature, req.require_json, client, judge_sem) if _is_groq(j3_id) else run_sync(j3_id, prompts)))
             tasks.append(j3_task); ids_present.append(j3_id)
 
         results = await asyncio.gather(*tasks)
@@ -357,8 +357,10 @@ class EvaluationService:
         verdicts_by_jid: Dict[str, List[Dict[str, Any]]] = {}
         for jid, res in zip(ids_present, results):
             verdicts_by_jid[jid] = [self._normalize_verdict(v, dim_keys, manual_metrics) for v in res["verdicts"]]
-            for it, v in zip(batch_items, verdicts_by_jid[jid]):
-                self.repo.add_judgment(db, run_id, it.id, jid, v, res["latency_ms"], res.get("provider_raw", {}))
+            raws = res.get("provider_raws", None)
+            for idx, (it, v) in enumerate(zip(batch_items, verdicts_by_jid[jid])):
+                raw_obj = (raws[idx] if isinstance(raws, list) and idx < len(raws) else res.get("provider_raw", {}))
+                self.repo.add_judgment(db, run_id, it.id, jid, v, res["latency_ms"], raw_obj)
 
   
         all_votes: List[List[str]] = []
@@ -621,15 +623,15 @@ class EvaluationService:
                     "predicted_class_correct": data.get("predicted_class_correct"),
                     "rubric": {
                         k: {
-                            "pass": _as_bool((rubric.get(k) or {}).get("pass", None)),
-                            "confidence": _as_conf((rubric.get(k) or {}).get("confidence", None)),
+                            "pass": _as_bool((rubric.get(k) or {}).get("pass", False)),
+                            "confidence": _as_conf((rubric.get(k) or {}).get("confidence", 0.0)),
                             "notes": str((rubric.get(k) or {}).get("notes", ""))[:30],
                         } for k in dim_keys
                     },
                     "manual": {
                         m: {
-                            "pass": _as_bool((manual.get(m) or {}).get("pass", None)),
-                            "confidence": _as_conf((manual.get(m) or {}).get("confidence", None)),
+                            "pass": _as_bool((manual.get(m) or {}).get("pass", False)),
+                            "confidence": _as_conf((manual.get(m) or {}).get("confidence", 0.0)),
                             "notes": str((manual.get(m) or {}).get("notes", ""))[:30],
                         } for m in req.manual_metrics
                     }
