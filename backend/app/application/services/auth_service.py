@@ -7,15 +7,20 @@ from app.persistence.security import hash_password, verify_password, sign_sessio
 
 
 class AuthService:
+    """Service for user authentication and registration."""
+    
     @staticmethod
     def register(db: Session, payload: RegisterRequest) -> RegisterResponse:
+        """Register a new user account."""
         if get_by_email(db, payload.email):
             raise HTTPException(status_code=400, detail="Email already registered")
         ph = hash_password(payload.password)
         user = create_user(db, email=payload.email, password_hash=ph, name=payload.name)
         return RegisterResponse(id=user.id, email=user.email, name=user.name)
+    
     @staticmethod
     def login(db: Session, payload: LoginRequest) -> LoginResponse:
+        """Authenticate user and return session token."""
         user = get_by_email(db, payload.email)
         if not user:
             raise HTTPException(status_code=401, detail="Invalid email or password")
@@ -23,7 +28,6 @@ class AuthService:
         if not verify_password(payload.password, user.password_hash):
             raise HTTPException(status_code=401, detail="Invalid email or password")
 
-        # 生成会话 token（签名串），我们也返回给前端备用
         token = sign_session(user.id)
 
         return LoginResponse(id=user.id, email=user.email, name=user.name, token=token)

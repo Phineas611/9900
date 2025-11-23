@@ -19,6 +19,7 @@ from app.utils.text_extractor import ContractProcessor
 from app.database.models.activity_log import ActivityLog
 
 class UploadService:
+    """Service for handling contract file uploads."""
 
     ALLOWED_EXTENSIONS = {".pdf", ".zip"}
     ALLOWED_MIME_TYPES = {
@@ -26,12 +27,11 @@ class UploadService:
         "application/zip"
     }
     
-
-    MAX_FILE_SIZE = 10 * 1024 * 1024
+    MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
     
     @staticmethod
     def validate_file(file: UploadFile) -> bool:
-        """Validate uploaded file type and size"""
+        """Validate uploaded file type and size."""
         # Check file size if available
         if hasattr(file, 'size') and file.size and file.size > UploadService.MAX_FILE_SIZE:
             return False
@@ -49,7 +49,7 @@ class UploadService:
     
     @staticmethod
     def save_uploaded_file(file: UploadFile, upload_dir: Path) -> Path:
-
+        """Save uploaded file to disk with unique filename."""
         file_extension = Path(file.filename).suffix
         unique_filename = f"{uuid.uuid4()}{file_extension}"
         file_path = upload_dir / unique_filename
@@ -66,27 +66,25 @@ class UploadService:
         file: UploadFile,
         user_id: int
     ) -> FileUploadResponse:
-      
-
+        """Process file upload: validate, save, create contract record, and trigger background processing."""
         if not UploadService.validate_file(file):
             raise HTTPException(
                 status_code=400,
                 detail="Invalid file type. Only PDF and ZIP files are allowed (max 10MB)."
             )
         
-
+        # Extract file name for contract title
         file_name = Path(file.filename).stem
         title = file_name if file_name else "Untitled Contract"
         
-
+        # Create contract record
         contract_data = ContractCreateRequest(
             title=title,
             description=f"Uploaded file: {file.filename}"
         )
         contract = create_contract(db, contract_data, user_id)
         
-
-        # Use persistent disk if UPLOAD_DIR is set (for Render), otherwise use uploads/
+        # Determine upload directory (use persistent disk if UPLOAD_DIR is set)
         if os.getenv("UPLOAD_DIR"):
             upload_base = Path(os.getenv("UPLOAD_DIR"))
         else:
@@ -94,11 +92,12 @@ class UploadService:
         upload_dir = upload_base / str(user_id)
         
         try:
-
+            # Save file to disk
             file_path = UploadService.save_uploaded_file(file, upload_dir)
             # Convert to absolute path to ensure persistence across restarts
             file_path_absolute = file_path.resolve()
 
+            # Update contract with file information
             update_contract_file_info(
                 db=db,
                 contract_id=contract.id,
@@ -109,7 +108,7 @@ class UploadService:
                 file_path=str(file_path_absolute)
             )
             
-
+            # Log upload activity
             activity_log = ActivityLog(
                 user_id=user_id,
                 event_type="UPLOAD",
@@ -119,6 +118,7 @@ class UploadService:
             db.add(activity_log)
             db.commit()
 
+            # Set contract status to pending
             update_contract_processing_status(
                 db=db,
                 contract_id=contract.id,
@@ -126,7 +126,7 @@ class UploadService:
                 status=ProcessingStatus.PENDING
             )
             
-
+            # Trigger background processing for sentence extraction
             BackgroundProcessor.process_contract_async(
                 contract_id=contract.id,
                 user_id=user_id,
@@ -142,7 +142,7 @@ class UploadService:
                 message="File uploaded successfully, processing in background"
             )
         except Exception as e:
-
+            # Mark contract as failed on error
             update_contract_processing_status(
                 db=db,
                 contract_id=contract.id,

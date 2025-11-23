@@ -27,7 +27,7 @@ def upload_contract(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    
+    """Upload a contract file (PDF or ZIP)."""
     return UploadService.process_upload(
         db=db,
         file=file,
@@ -40,7 +40,7 @@ def get_upload_status(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-
+    """Get upload and processing status for a contract."""
     contract = get_contract_by_id(db, contract_id, current_user.id)
     if not contract:
         raise HTTPException(status_code=404, detail="Contract not found")
@@ -61,7 +61,7 @@ def download_processed_file(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-  
+    """Download processed contract sentences in specified format (csv/xlsx/txt)."""
     contract = get_contract_by_id(db, contract_id, current_user.id)
     if not contract:
         raise HTTPException(status_code=404, detail="Contract not found")
@@ -69,7 +69,7 @@ def download_processed_file(
     if contract.processing_status != "completed":
         raise HTTPException(status_code=400, detail="Contract processing not completed")
     
-    # 构建文件路径（统一为backend/outputs）
+    # Build file path (unified to backend/outputs)
     output_dir = OUTPUT_ROOT / str(current_user.id) / str(contract_id)
     file_path = output_dir / f"sentences.{format}"
     

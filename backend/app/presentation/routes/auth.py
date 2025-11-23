@@ -11,20 +11,27 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.post("/register", response_model=RegisterResponse, status_code=201)
 def register(payload: RegisterRequest, db: Session = Depends(get_db)):
+    """Register a new user account."""
     return AuthService.register(db, payload)
+
 @router.post("/login", response_model=LoginResponse)
 def login(payload: LoginRequest, response: Response, db: Session = Depends(get_db)):
+    """Login user and set session cookie."""
     res = AuthService.login(db, payload)
     response.set_cookie(
         key="session", value=res.token,
         httponly=True, samesite="lax", max_age=86400, path="/"
     )
     return res
+
 @router.get("/me")
 def me(user = Depends(get_current_user)):
+    """Get current authenticated user information."""
     return {"id": user.id, "email": user.email, "name": user.name}
+
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 def logout(response: Response):
+    """Logout user by clearing session cookie."""
     response.delete_cookie(
         key="session",
         path="/",
