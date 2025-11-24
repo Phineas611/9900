@@ -1,9 +1,7 @@
 import os
 import re
-<<<<<<< HEAD
 import json
-=======
->>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
+import time  # NEW: used to throttle HF request rate
 from typing import List, Optional, Dict, Any, Callable
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
@@ -36,7 +34,6 @@ class PromptLabService:
         All configured models are generic NLI-type classifiers (not sentiment-specific).
         """
         self._models: Dict[str, Dict[str, Any]] = {
-<<<<<<< HEAD
             "llama3-8ba_instruct-hf": {
                 "id": "llama3-8ba_instruct-hf",
                 "name": "Llama3 8B Instruct (HF)",
@@ -49,81 +46,76 @@ class PromptLabService:
                 "hf_name": "meta-llama/Meta-Llama-3-70B-Instruct",
                 "task": "chat-completion",
             },
-            "mixtral-8x7ba_instruct-hf": {
-                "id": "mixtral-8x7ba_instruct-hf",
-                "name": "Mixtral 8x7B Instruct (HF)",
-                "hf_name": "mistralai/Mixtral-8x7B-Instruct-v0.1",
+            "qwen3-8b": {
+                "id": "qwen3-8b",
+                "name": "Qwen3 8B (HF)",
+                "hf_name": "Qwen/Qwen3-8B",
                 "task": "chat-completion",
             },
-=======
->>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
-            "deberta-base-mnli": {
-                "id": "deberta-base-mnli",
-                "name": "DeBERTa Base MNLI (classification)",
-                "hf_name": "microsoft/deberta-base-mnli",
-                "task": "text-classification",
-            },
-            "roberta-large-mnli": {
-                "id": "roberta-large-mnli",
-                "name": "RoBERTa Large MNLI (classification)",
-                "hf_name": "FacebookAI/roberta-large-mnli",
-                "task": "text-classification",
-            },
-<<<<<<< HEAD
-            "mistral-7b-instruct": {
-                "id": "mistral-7b-instruct",
-                "name": "Mistral-7B Instruct (generation)",
-                "hf_name": "mistralai/Mistral-7B-Instruct-v0.3",
-                "task": "chat-completion",
-            },
-            "qwen2.5-7b-instruct": {
-                "id": "qwen2.5-7b-instruct",
-                "name": "Qwen2.5-7B Instruct (generation)",
-                "hf_name": "Qwen/Qwen2.5-7B-Instruct",
-                "task": "chat-completion",
-            },
-            
-
         }
 
         # Default model: light-weight Groq 8B chat
-        self._current_model_id: str = "qwen2.5-7b-instruct"
-=======
-            "deberta-large-mnli": {
-                "id": "deberta-large-mnli",
-                "name": "DeBERTa Large MNLI (classification)",
-                "hf_name": "microsoft/deberta-large-mnli",
-                "task": "text-classification",
-            },
-        }
+        self._current_model_id: str = "llama3-8ba_instruct-hf"
 
-        # Default model: light-weight DeBERTa base MNLI.
-        self._current_model_id: str = "deberta-base-mnli"
->>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
-
-        # ----------------- prompt templates -----------------
+        # ----------------- prompt templates (unified format) -----------------
+        # All prompts now explicitly ask for:
+        # - a classification: Ambiguous / Unambiguous
+        # - a concrete rationale explaining why
         self._prompts: Dict[str, str] = {
             "amb-basic": (
-                "Classify the following contract clause as AMBIGUOUS or UNAMBIGUOUS, "
-                "then briefly explain why.\nClause: {clause}\nOutput:"
+                "You are a legal AI assistant for contract review.\n"
+                "Task: Decide whether the following contract clause is Ambiguous or Unambiguous and briefly explain why.\n\n"
+                "Definitions:\n"
+                "- Ambiguous: Uses subjective or vague terms (e.g., 'reasonable', 'promptly', 'satisfactory', 'materially') "
+                "or lacks concrete metrics, dates, amounts, or conditions.\n"
+                "- Unambiguous: Uses specific numbers, dates, percentages, or objective standards (e.g., '14 days', '$5,000').\n\n"
+                "Clause:\n\"{clause}\"\n\n"
+                "Output Format (English only):\n"
+                "Classification: Ambiguous or Unambiguous\n"
+                "Rationale: One sentence explaining why the clause is Ambiguous or Unambiguous, "
+                "referring to specific words or structure in the clause."
             ),
             "amb-strict": (
-                "You are a contract ambiguity checker. If multiple reasonable meanings exist, "
-                "return AMBIGUOUS, else UNAMBIGUOUS. Provide a short reason.\nClause: {clause}\n"
-            ),
-            "amb-layman": (
-                "Explain for a non-lawyer whether this clause is ambiguous. "
-                "First say 'Ambiguous' or 'Not Ambiguous', then give a short explanation.\n"
-                "Clause: {clause}\n"
+                "You are acting as a strict contract ambiguity auditor.\n"
+                "If a clause leaves ANY room for interpretation, treat it as Ambiguous. "
+                "Highlight vague or subjective expressions.\n\n"
+                "Common vague expressions include: reasonable, best efforts, appropriate, substantial, undue, "
+                "as soon as practicable, without undue delay.\n\n"
+                "Clause:\n\"{clause}\"\n\n"
+                "Output Format (English only):\n"
+                "Classification: Ambiguous or Unambiguous\n"
+                "Rationale: One sentence explaining why, explicitly mentioning the vague or clear terms in the clause."
             ),
             "amb-risky": (
-                "If the clause leaves room for interpretation (actors/times/amounts/conditions), "
-                "mark AMBIGUOUS and justify briefly.\nClause: {clause}\n"
+                "You are a legal risk analyst.\n"
+                "Analyze whether the following clause is Ambiguous or Unambiguous and explain the legal risk.\n\n"
+                "Guidance:\n"
+                "- If the clause is vague or open to multiple interpretations, it is Ambiguous and therefore higher legal risk.\n"
+                "- If the clause is precise and leaves little room for interpretation, it is Unambiguous and lower legal risk.\n\n"
+                "Clause:\n\"{clause}\"\n\n"
+                "Output Format (English only):\n"
+                "Classification: Ambiguous or Unambiguous\n"
+                "Rationale: One sentence explaining the key source of risk or clarity, based on the wording of the clause."
+            ),
+            "amb-layman": (
+                "You are explaining contract language to a non-lawyer.\n"
+                "Decide whether the sentence is Ambiguous or Unambiguous, and explain it in simple language.\n\n"
+                "Clause:\n\"{clause}\"\n\n"
+                "Output Format (English only):\n"
+                "Classification: Ambiguous or Unambiguous\n"
+                "Rationale: One or two simple sentences that a non-lawyer can understand, "
+                "stating whether the clause is clear or confusing and why."
             ),
             "amb-short": (
-                "Is this clause ambiguous? Answer AMBIGUOUS or UNAMBIGUOUS, then one-sentence reason.\n"
-                "Clause: {clause}\n"
-            ),
+                "Binary classification task for contract ambiguity.\n"
+                "Input clause:\n\"{clause}\"\n\n"
+                "Rules of thumb:\n"
+                "- If the clause mainly uses subjective or vague words, classify as Ambiguous.\n"
+                "- If the clause mainly uses objective numbers, dates, or precise conditions, classify as Unambiguous.\n\n"
+                "Output Format (English only):\n"
+                "Classification: Ambiguous or Unambiguous\n"
+                "Rationale: A very short explanation (one sentence) referring to the main vague or precise elements."
+            )
         }
 
         # Optional: simple in-memory cache (currently unused).
@@ -204,7 +196,6 @@ class PromptLabService:
             return None
 
         cfg = self._models[model_id]
-<<<<<<< HEAD
         task = cfg.get("task", "text-classification")
         repo = cfg["hf_name"]
 
@@ -213,12 +204,25 @@ class PromptLabService:
             if not api_key:
                 self._last_hf_error = "missing GROQ_API_KEY"
                 return None
-            import requests, time
+            import requests, time as _time
             headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
             req = {
                 "model": repo,
                 "messages": [
-                    {"role": "system", "content": "Answer AMBIGUOUS or UNAMBIGUOUS then a brief reason."},
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are a legal AI assistant for contract ambiguity analysis.\n"
+                            "You MUST do three things:\n"
+                            "1) Decide whether the clause is AMBIGUOUS or UNAMBIGUOUS.\n"
+                            "2) Provide a confidence score between 0 and 1 (as a decimal number).\n"
+                            "3) Provide a brief rationale explaining why, referencing the wording of the clause.\n\n"
+                            "Respond in exactly this format (English only):\n"
+                            "Label: AMBIGUOUS or UNAMBIGUOUS\n"
+                            "Confidence: <number between 0 and 1>\n"
+                            "Rationale: <one-sentence explanation>"
+                        ),
+                    },
                     {"role": "user", "content": text},
                 ],
                 "temperature": 0.0,
@@ -228,7 +232,7 @@ class PromptLabService:
             last_err = None
             for attempt, d in enumerate(delays, start=1):
                 if d:
-                    time.sleep(d)
+                    _time.sleep(d)
                 try:
                     resp = requests.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=req, timeout=60)
                     if resp.status_code == 200:
@@ -246,8 +250,6 @@ class PromptLabService:
                     break
             self._last_hf_error = last_err or "unknown_groq_error"
             return None
-=======
->>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
 
         try:
             client = self._get_hf_client()
@@ -255,20 +257,14 @@ class PromptLabService:
             self._last_hf_error = f"client_init: {e}"
             return None
 
-<<<<<<< HEAD
-=======
-        task = cfg.get("task", "text-classification")
-        repo = cfg["hf_name"]
-
->>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
-        import time
+        import time as _time
         # Exponential backoff, up to ~1 minute total.
         delays = [0, 2, 4, 8, 16, 32]
         last_err = None
 
         for attempt, delay in enumerate(delays, start=1):
             if delay:
-                time.sleep(delay)
+                _time.sleep(delay)
 
             try:
                 if task == "text-generation":
@@ -282,12 +278,25 @@ class PromptLabService:
                         return_full_text=False,
                     )
                     data = [{"generated_text": out}]
-<<<<<<< HEAD
                 elif task == "chat-completion":
+                    # Require label + confidence + rationale
                     out = client.chat_completion(
                         model=repo,
                         messages=[
-                            {"role": "system", "content": "Answer AMBIGUOUS or UNAMBIGUOUS then a brief reason."},
+                            {
+                                "role": "system",
+                                "content": (
+                                    "You are a legal AI assistant for contract ambiguity analysis.\n"
+                                    "You MUST do three things:\n"
+                                    "1) Decide whether the clause is AMBIGUOUS or UNAMBIGUOUS.\n"
+                                    "2) Provide a confidence score between 0 and 1 (as a decimal number).\n"
+                                    "3) Provide a brief rationale explaining why, referencing the wording of the clause.\n\n"
+                                    "Respond in exactly this format (English only):\n"
+                                    "Label: AMBIGUOUS or UNAMBIGUOUS\n"
+                                    "Confidence: <number between 0 and 1>\n"
+                                    "Rationale: <one-sentence explanation>"
+                                ),
+                            },
                             {"role": "user", "content": text},
                         ],
                     )
@@ -296,8 +305,6 @@ class PromptLabService:
                     except Exception:
                         content = str(out)
                     data = [{"generated_text": content}]
-=======
->>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
                 else:
                     # Main path: generic text-classification call.
                     data = client.text_classification(
@@ -330,7 +337,7 @@ class PromptLabService:
         {
             "label": "AMBIGUOUS" or "UNAMBIGUOUS",
             "rationale": "...",
-            "score": float
+            "score": float  # probability in [0, 1]
         }
 
         For classification models, we interpret NLI-style labels (e.g., NEUTRAL,
@@ -339,16 +346,17 @@ class PromptLabService:
         """
         task = cfg.get("task", "text-classification")
 
-<<<<<<< HEAD
         # ----- Generation-style output -----
         if task in ("text-generation", "chat-completion", "groq-chat"):
-=======
-        # ----- Fallback: generation-style output (currently unused) -----
-        if task == "text-generation":
->>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
             if isinstance(data, list) and data and "generated_text" in data[0]:
                 text = str(data[0]["generated_text"])
                 up = text.upper()
+
+                # Extract confidence score from model output and normalize to [0, 1]
+                score = self._extract_score_from_rationale(text)
+                if score is None:
+                    score = 0.7
+                score = max(0.0, min(1.0, score))
 
                 if "AMBIGUOUS" in up and "UNAMBIGUOUS" not in up:
                     label = "AMBIGUOUS"
@@ -360,7 +368,7 @@ class PromptLabService:
                 return {
                     "label": label,
                     "rationale": text.strip(),
-                    "score": 0.9,
+                    "score": float(score),
                 }
 
             return {
@@ -374,12 +382,9 @@ class PromptLabService:
             first = data[0]
             raw = str(first.get("label", "")).upper()
             score = float(first.get("score", 0.9))
+            # Force score to be a probability in [0, 1]
+            score = max(0.0, min(1.0, score))
 
-            # Heuristic mapping:
-            # - NLI-like labels such as CONTRADICTION / NEUTRAL / UNSURE / UNKNOWN / MIXED
-            #   are interpreted as signs of ambiguity: the model sees multiple or unstable
-            #   possible readings.
-            # - Other labels (e.g., ENTAILMENT) are treated as relatively clear semantics.
             ambiguous_markers = (
                 "CONTRADICT",
                 "NEUTRAL",
@@ -388,7 +393,6 @@ class PromptLabService:
                 "UNKNOWN",
                 "MIXED",
                 "OTHER",
-                # Additional conservative markers so older models still behave reasonably.
                 "NEG",
                 "RISK",
                 "0",
@@ -422,7 +426,6 @@ class PromptLabService:
             "score": 0.5,
         }
 
-<<<<<<< HEAD
     def _run_batch_chat(self, model_id: str, sentences: List[str], prompt: str) -> Optional[List[Dict[str, Any]]]:
         self._last_hf_error = None
         if model_id not in self._models:
@@ -436,8 +439,11 @@ class PromptLabService:
 
         items = [{"id": i + 1, "sentence": s} for i, s in enumerate(sentences)]
         sys_msg = (
-            "Return only strict JSON array. Each element must have keys: sentence, label, rationale. "
-            "label must be AMBIGUOUS or UNAMBIGUOUS. No extra text."
+            "Return only strict JSON array. Each element must have keys: sentence, label, rationale, score. "
+            "label must be AMBIGUOUS or UNAMBIGUOUS. "
+            "score must be a probability number between 0 and 1. "
+            "rationale must be a brief English explanation of why the clause is classified that way. "
+            "No extra text."
         )
         user_msg = json.dumps({
             "instruction": prompt,
@@ -510,7 +516,20 @@ class PromptLabService:
                 else:
                     lbl = "AMBIGUOUS"
                 rat = str(it.get("rationale", "")).strip()
-                score = self._extract_score_from_rationale(rat) or 0.9
+
+                raw_score = it.get("score", None)
+                if isinstance(raw_score, (int, float)):
+                    val = float(raw_score)
+                    if 0.0 <= val <= 1.0:
+                        score = val
+                    elif 1.0 < val <= 100.0:
+                        score = val / 100.0
+                    else:
+                        score = 0.7
+                else:
+                    score = self._extract_score_from_rationale(rat) or 0.7
+                score = max(0.0, min(1.0, score))
+
                 out_list.append({
                     "sentence": sent,
                     "label": lbl,
@@ -522,8 +541,6 @@ class PromptLabService:
             self._last_hf_error = str(e)[:200]
             return None
 
-=======
->>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
     def _run_inference(self, sentence: str, prompt: str) -> Dict[str, Any]:
         """
         High-level inference wrapper.
@@ -545,48 +562,44 @@ class PromptLabService:
                 text = f"{prompt}\nClause: {sentence}\n"
 
         out = self._run_remote_model(model["id"], text)
+        # Do not fall back to other models; if the primary model fails, raise an error
+        # so that the caller can mark this sentence as ERROR.
         if not out:
-<<<<<<< HEAD
-            fb_id = "deberta-base-mnli"
-            try:
-                out = self._run_remote_model(fb_id, sentence)
-            except Exception:
-                out = None
-            if not out:
-                hint = f" Last HF error: {self._last_hf_error}" if self._last_hf_error else ""
-                raise RuntimeError(
-                    f"Hugging Face model unavailable. "
-                    f"Check HF_API_TOKEN / HF_TOKEN, network, and model id '{model['hf_name']}'.{hint}"
-                )
-=======
             hint = f" Last HF error: {self._last_hf_error}" if self._last_hf_error else ""
             raise RuntimeError(
                 f"Hugging Face model unavailable. "
                 f"Check HF_API_TOKEN / HF_TOKEN, network, and model id '{model['hf_name']}'.{hint}"
             )
->>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
+
         out["rationale"] = "[HF] " + str(out.get("rationale", "")).lstrip()
         return out
 
     # ---------- persistence helpers ----------
     def _extract_score_from_rationale(self, rationale: str) -> Optional[float]:
         """
-        Try to extract a numeric score from the rationale text, using simple regex patterns.
-        This is best-effort only; we fall back to a default if nothing is found.
+        Try to extract a numeric confidence score from the model output or rationale text.
+        This returns a float in [0, 1] if possible:
+        - If the extracted value is already between 0 and 1, use it directly.
+        - If the extracted value is between 1 and 100, treat it as a percentage and divide by 100.
         """
         if not rationale:
             return None
 
         patterns = [
-            r"score\s*:?\s*(\d+\.?\d*)",
-            r"with\s+score\s+(\d+\.?\d*)",
+            r"confidence\s*:?\s*([0-9]+\.?[0-9]*)",
+            r"score\s*:?\s*([0-9]+\.?[0-9]*)",
+            r"probability\s*:?\s*([0-9]+\.?[0-9]*)",
         ]
 
         for pattern in patterns:
             match = re.search(pattern, rationale, re.IGNORECASE)
             if match:
                 try:
-                    return float(match.group(1))
+                    val = float(match.group(1))
+                    if 0.0 <= val <= 1.0:
+                        return val
+                    if 1.0 < val <= 100.0:
+                        return val / 100.0
                 except (ValueError, IndexError):
                     continue
 
@@ -667,20 +680,23 @@ class PromptLabService:
         model = self.get_current_model()
         res: List[ClassifyResult] = []
 
-        for s in sentences:
+        for idx, s in enumerate(sentences):
             inf = self._run_inference(s, prompt)
             sid = self._persist_result(db, user_id, contract_id, s, inf["label"], inf["rationale"], inf["score"])
             res.append(
                 ClassifyResult(
                     sentence=s,
                     label=inf["label"],
-                    score=inf["score"],
+                    score=inf["score"],  # probability in [0, 1]
                     model_id=model["id"],
                     rationale=inf["rationale"],
                     contract_id=contract_id,
                     sentence_id=sid,
                 )
             )
+            # Small delay between single-sentence classifications to reduce request rate.
+            time.sleep(0.5)
+
         return res
 
     def explain_one(
@@ -719,9 +735,9 @@ class PromptLabService:
         progress_callback: Optional[Callable[[int, int], None]] = None,
     ) -> List[ExplainResult]:
         """
-        Explain ambiguity for a batch of sentences, committing in batches
-        for robustness and logging progress as we go.
-        """
+            Explain ambiguity for a batch of sentences, committing in batches
+            for robustness and logging progress as we go.
+            """
         import logging
 
         logger = logging.getLogger(__name__)
@@ -733,11 +749,7 @@ class PromptLabService:
 
         logger.info(f"[PromptLab] Starting batch processing: {total} sentences, contract_id={contract_id}")
 
-<<<<<<< HEAD
         BATCH_SIZE = 50
-=======
-        BATCH_SIZE = 10
->>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
         for i in range(0, len(sentences), BATCH_SIZE):
             batch = sentences[i : i + BATCH_SIZE]
             batch_num = i // BATCH_SIZE + 1
@@ -747,7 +759,6 @@ class PromptLabService:
                 f"({i+1}-{min(i+BATCH_SIZE, total)}/{total})"
             )
 
-<<<<<<< HEAD
             used_batch_chat = False
             try:
                 if model.get("task") == "chat-completion":
@@ -763,7 +774,7 @@ class PromptLabService:
                                 s,
                                 inf["label"],
                                 inf["rationale"],
-                                inf.get("score", 0.9),
+                                inf.get("score", 0.7),
                                 auto_commit=False,
                             )
                             out.append(
@@ -817,45 +828,8 @@ class PromptLabService:
                                 sentence_id=None,
                             )
                         )
-=======
-            for idx_in_batch, s in enumerate(batch):
-                try:
-                    inf = self._run_inference(s, prompt)
-                    sid = self._persist_result(
-                        db,
-                        user_id,
-                        contract_id,
-                        s,
-                        inf["label"],
-                        inf["rationale"],
-                        inf["score"],
-                        auto_commit=False,
-                    )
-                    out.append(
-                        ExplainResult(
-                            sentence=s,
-                            label=inf["label"],
-                            rationale=inf["rationale"],
-                            model_id=model["id"],
-                            contract_id=contract_id,
-                            sentence_id=sid,
-                        )
-                    )
-                except Exception as e:
-                    logger.error(
-                        f"[PromptLab] Failed to process sentence {i+idx_in_batch+1}/{total}: {str(e)[:200]}"
-                    )
-                    out.append(
-                        ExplainResult(
-                            sentence=s,
-                            label="ERROR",
-                            rationale=f"Processing error: {str(e)[:200]}",
-                            model_id=model["id"],
-                            contract_id=contract_id,
-                            sentence_id=None,
-                        )
-                    )
->>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
+
+                    time.sleep(0.5)
 
             try:
                 db.commit()
