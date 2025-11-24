@@ -31,7 +31,11 @@ class UploadService:
     
     @staticmethod
     def validate_file(file: UploadFile) -> bool:
+<<<<<<< HEAD
         """Validate uploaded file type and size."""
+=======
+        """Validate uploaded file type and size"""
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
         # Check file size if available
         if hasattr(file, 'size') and file.size and file.size > UploadService.MAX_FILE_SIZE:
             return False
@@ -84,7 +88,12 @@ class UploadService:
         )
         contract = create_contract(db, contract_data, user_id)
         
+<<<<<<< HEAD
         # Determine upload directory (use persistent disk if UPLOAD_DIR is set)
+=======
+
+        # Use persistent disk if UPLOAD_DIR is set (for Render), otherwise use uploads/
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
         if os.getenv("UPLOAD_DIR"):
             upload_base = Path(os.getenv("UPLOAD_DIR"))
         else:

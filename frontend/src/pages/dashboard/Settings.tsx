@@ -1,29 +1,58 @@
+<<<<<<< HEAD
 import { useState, useEffect } from 'react';
 import './Settings.css';
 
 interface SettingsState {
+=======
+import { useState } from 'react';
+import './Settings.css';
+
+interface SettingsState {
+  // Model Settings
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
   defaultModel: string;
   explanationLanguage: string;
   confidenceThreshold: number;
   enableModelComparison: boolean;
+<<<<<<< HEAD
+=======
+
+  // Report Templates
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
   defaultFormat: string;
   templateStyle: string;
   reportHeader: string;
   signatureBlock: string;
   includeCharts: boolean;
+<<<<<<< HEAD
   retentionPeriod: string;
   autoDeleteFiles: boolean;
   exportBeforeDeletion: boolean;
+=======
+
+  // Data Retention Policy
+  retentionPeriod: string;
+  autoDeleteFiles: boolean;
+  exportBeforeDeletion: boolean;
+
+  // Notifications
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
   emailNotifications: boolean;
   processingComplete: boolean;
   weeklyDigest: boolean;
   securityAlerts: boolean;
+<<<<<<< HEAD
+=======
+
+  // Interface Preferences
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
   theme: string;
   contextView: boolean;
   showConfidenceScores: boolean;
   highlightAmbiguousText: boolean;
 }
 
+<<<<<<< HEAD
 const useTheme = () => {
   const [theme, setTheme] = useState<string>(() => {
     return localStorage.getItem('app-theme') || 'system';
@@ -45,43 +74,76 @@ const Settings = () => {
   const { theme, setTheme } = useTheme();
 
   const [_, setSettings] = useState<SettingsState>({
+=======
+const Settings = () => {
+  const [settings, setSettings] = useState<SettingsState>({
+    // Model Settings
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
     defaultModel: 'Ensemble Model',
     explanationLanguage: 'Standard',
     confidenceThreshold: 70,
     enableModelComparison: true,
+<<<<<<< HEAD
+=======
+
+    // Report Templates
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
     defaultFormat: 'PDF Report',
     templateStyle: 'Professional',
     reportHeader: 'Legal Contract Analysis Report',
     signatureBlock: 'Enter signature or lower text',
     includeCharts: true,
+<<<<<<< HEAD
     retentionPeriod: '12 Months',
     autoDeleteFiles: true,
     exportBeforeDeletion: true,
+=======
+
+    // Data Retention Policy
+    retentionPeriod: '12 Months',
+    autoDeleteFiles: true,
+    exportBeforeDeletion: true,
+
+    // Notifications
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
     emailNotifications: true,
     processingComplete: true,
     weeklyDigest: true,
     securityAlerts: true,
+<<<<<<< HEAD
     theme: theme,
+=======
+
+    // Interface Preferences
+    theme: 'System',
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
     contextView: false,
     showConfidenceScores: true,
     highlightAmbiguousText: true,
   });
 
   const handleInputChange = (field: keyof SettingsState, value: any) => {
+<<<<<<< HEAD
     if (field === 'theme') {
       setTheme(value);
     }
+=======
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
     setSettings(prev => ({
       ...prev,
       [field]: value
     }));
   };
 
+<<<<<<< HEAD
   /*
   const handleReset = () => {
     const defaultTheme = 'system';
     setTheme(defaultTheme);
     
+=======
+  const handleReset = () => {
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
     setSettings({
       defaultModel: 'Ensemble Model',
       explanationLanguage: 'Standard',
@@ -99,7 +161,11 @@ const Settings = () => {
       processingComplete: true,
       weeklyDigest: true,
       securityAlerts: true,
+<<<<<<< HEAD
       theme: defaultTheme,
+=======
+      theme: 'System',
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
       contextView: false,
       showConfidenceScores: true,
       highlightAmbiguousText: true,
@@ -133,17 +199,29 @@ const Settings = () => {
       </label>
     );
   };
+<<<<<<< HEAD
   */
 
   return (
     <div className="settings-page">
+=======
+
+  return (
+    <div className="settings-page">
+      {/* Page Header */}
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
       <div className="page-header">
         <div className="header-content">
           <div className="header-text">
             <h1>Settings</h1>
+<<<<<<< HEAD
             <p>Configure application preferences</p>
           </div>
           {/*
+=======
+            <p>Configure models, reports, data retention, and application preferences</p>
+          </div>
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
           <div className="header-actions">
             <button className="btn-secondary" onClick={handleReset}>
               Reset to Defaults
@@ -152,12 +230,19 @@ const Settings = () => {
               Save Changes
             </button>
           </div>
+<<<<<<< HEAD
           */}
+=======
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
         </div>
       </div>
 
       <div className="settings-content">
+<<<<<<< HEAD
         {/*
+=======
+        {/* Model Settings */}
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
         <div className="settings-section">
           <div className="section-header">
             <div className="section-icon">🧠</div>
@@ -228,6 +313,10 @@ const Settings = () => {
           </div>
         </div>
 
+<<<<<<< HEAD
+=======
+        {/* Report Templates */}
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
         <div className="settings-section">
           <div className="section-header">
             <h2>Report Templates</h2>
@@ -301,6 +390,10 @@ const Settings = () => {
           </div>
         </div>
 
+<<<<<<< HEAD
+=======
+        {/* Data Retention Policy */}
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
         <div className="settings-section">
           <div className="section-header">
             <div className="section-icon">📊</div>
@@ -356,6 +449,10 @@ const Settings = () => {
           </div>
         </div>
 
+<<<<<<< HEAD
+=======
+        {/* Notifications */}
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
         <div className="settings-section">
           <div className="section-header">
             <div className="section-icon">📊</div>
@@ -424,8 +521,13 @@ const Settings = () => {
             </div>
           </div>
         </div>
+<<<<<<< HEAD
         */}
 
+=======
+
+        {/* Interface Preferences */}
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
         <div className="settings-section">
           <div className="section-header">
             <div className="section-icon">📊</div>
@@ -439,6 +541,7 @@ const Settings = () => {
             <div className="setting-item">
               <label className="setting-label">Theme</label>
               <select 
+<<<<<<< HEAD
                 value={theme}
                 onChange={(e) => handleInputChange('theme', e.target.value)}
                 className="setting-input"
@@ -451,6 +554,19 @@ const Settings = () => {
             </div>
 
             {/*
+=======
+                value={settings.theme}
+                onChange={(e) => handleInputChange('theme', e.target.value)}
+                className="setting-input"
+              >
+                <option value="System">System</option>
+                <option value="Light">Light</option>
+                <option value="Dark">Dark</option>
+                <option value="Auto">Auto</option>
+              </select>
+            </div>
+
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
             <div className="toggle-item">
               <div className="toggle-content">
                 <div className="toggle-text">
@@ -489,7 +605,10 @@ const Settings = () => {
                 />
               </div>
             </div>
+<<<<<<< HEAD
             */}
+=======
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
           </div>
         </div>
       </div>

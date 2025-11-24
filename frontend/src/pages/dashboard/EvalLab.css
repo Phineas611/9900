@@ -20,6 +20,10 @@
   font-weight: 600;
 }
 
+<<<<<<< HEAD
+=======
+/* Error Message */
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
 .error-message {
   background: #fed7d7;
   color: #c53030;
@@ -30,6 +34,10 @@
   font-weight: 500;
 }
 
+<<<<<<< HEAD
+=======
+/* Panels */
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
 .config-panel,
 .upload-panel,
 .status-panel,
@@ -42,6 +50,10 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
+<<<<<<< HEAD
+=======
+/* Configuration Section */
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
 .config-section {
   margin-bottom: 20px;
 }
@@ -89,6 +101,10 @@
   margin: 0;
 }
 
+<<<<<<< HEAD
+=======
+/* Upload Panel */
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
 .upload-controls {
   display: flex;
   flex-direction: column;
@@ -202,7 +218,10 @@
 .run-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+<<<<<<< HEAD
   background: #a0aec0;
+=======
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
 }
 
 .upload-info {
@@ -216,12 +235,17 @@
   margin-bottom: 12px;
 }
 
+<<<<<<< HEAD
+=======
+/* Status Panel */
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
 .status-content {
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
+<<<<<<< HEAD
 .status-header {
   display: flex;
   align-items: center;
@@ -286,6 +310,11 @@
 
 .progress-section {
   margin: 8px 0;
+=======
+.progress-info {
+  font-weight: 500;
+  color: #2d3748;
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
 }
 
 .progress-bar {
@@ -322,6 +351,7 @@
   font-size: 0.85rem;
 }
 
+<<<<<<< HEAD
 .status-placeholder {
   color: #718096;
   font-style: italic;
@@ -329,6 +359,9 @@
   padding: 20px;
 }
 
+=======
+/* Records Panel */
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
 .export-buttons {
   display: flex;
   gap: 8px;
@@ -431,6 +464,10 @@
   font-size: 0.85rem;
 }
 
+<<<<<<< HEAD
+=======
+/* Responsive */
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
 @media (max-width: 768px) {
   .eval-lab {
     padding: 16px;
@@ -474,10 +511,13 @@
   .export-buttons {
     flex-direction: column;
   }
+<<<<<<< HEAD
 
   .status-row {
     flex-direction: column;
     align-items: flex-start;
     gap: 2px;
   }
+=======
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
 }

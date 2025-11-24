@@ -5,6 +5,10 @@
   text-align: left;
 }
 
+<<<<<<< HEAD
+=======
+/* Page Header */
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
 .page-header {
   margin-bottom: 32px;
   text-align: left;
@@ -25,6 +29,10 @@
   text-align: left;
 }
 
+<<<<<<< HEAD
+=======
+/* Tools Card */
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
 .tools-card {
   background: white;
   border: 1px solid #e2e8f0;
@@ -71,6 +79,10 @@
   width: 100%;
 }
 
+<<<<<<< HEAD
+=======
+/* Search Section */
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
 .search-section {
   flex: 1;
   min-width: 300px;
@@ -100,6 +112,10 @@
   color: #a0aec0;
 }
 
+<<<<<<< HEAD
+=======
+/* Filters Row */
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
 .filters-row {
   display: flex;
   gap: 16px;
@@ -160,6 +176,10 @@
   background: #2f855a;
 }
 
+<<<<<<< HEAD
+=======
+/* Statistics Cards */
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
 .stats-cards {
   display: flex;
   gap: 20px;
@@ -193,6 +213,10 @@
   font-weight: 500;
 }
 
+<<<<<<< HEAD
+=======
+/* Results Card */
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
 .results-card {
   background: white;
   border: 1px solid #e2e8f0;
@@ -224,6 +248,10 @@
   text-align: left;
 }
 
+<<<<<<< HEAD
+=======
+/* Table Styles */
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
 .table-container {
   overflow-x: auto;
 }
@@ -253,6 +281,10 @@
   text-align: left;
 }
 
+<<<<<<< HEAD
+=======
+/* Sentence Row Styles */
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
 .sentence-row {
   transition: background-color 0.2s;
 }
@@ -289,11 +321,14 @@
   line-height: 1.4;
 }
 
+<<<<<<< HEAD
 .doc-name {
   font-size: 0.8rem;
   color: #718096;
 }
 
+=======
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
 .page-number {
   color: #718096;
   font-weight: 500;
@@ -301,6 +336,10 @@
   width: 80px;
 }
 
+<<<<<<< HEAD
+=======
+/* No Results */
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
 .no-results {
   text-align: center;
   padding: 40px !important;
@@ -312,6 +351,10 @@
   font-style: italic;
 }
 
+<<<<<<< HEAD
+=======
+/* Classification Badges */
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
 .classification-badge {
   padding: 6px 12px;
   border-radius: 20px;
@@ -330,11 +373,15 @@
   color: #276749;
 }
 
+<<<<<<< HEAD
 .classification-badge.pending {
   background-color: #fef5e7;
   color: #dd6b20;
 }
 
+=======
+/* Confidence and Score */
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
 .confidence-value,
 .score-value {
   font-weight: 600;
@@ -349,6 +396,10 @@
   color: #38a169;
 }
 
+<<<<<<< HEAD
+=======
+/* Actions */
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
 .actions-sentence {
   white-space: nowrap;
   text-align: center;
@@ -380,6 +431,10 @@
   color: white;
 }
 
+<<<<<<< HEAD
+=======
+/* Sentence Detail Styles */
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
 .sentence-detail-row {
   background-color: #f7fafc;
   border-left: 4px solid #3182ce;
@@ -430,6 +485,7 @@
   padding: 12px 0;
 }
 
+<<<<<<< HEAD
 .classification-details {
   color: #4a5568;
   line-height: 1.6;
@@ -437,6 +493,21 @@
 
 .classification-details p {
   margin: 8px 0;
+=======
+.ambiguity-reasons {
+  color: #4a5568;
+  padding-left: 20px;
+  margin: 0;
+}
+
+.ambiguity-reasons li {
+  margin-bottom: 8px;
+  line-height: 1.5;
+}
+
+.ambiguity-reasons li:last-child {
+  margin-bottom: 0;
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
 }
 
 .action-buttons {
@@ -462,6 +533,10 @@
   color: white;
 }
 
+<<<<<<< HEAD
+=======
+/* Pagination */
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
 .pagination {
   display: flex;
   justify-content: center;
@@ -499,6 +574,10 @@
   font-weight: 500;
 }
 
+<<<<<<< HEAD
+=======
+/* Loading and Error States */
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
 .loading, .error {
   display: flex;
   justify-content: center;
@@ -531,6 +610,10 @@
   background-color: #2c5aa0;
 }
 
+<<<<<<< HEAD
+=======
+/* Responsive Design */
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
 @media (max-width: 1024px) {
   .filters-search-row {
     flex-direction: column;

@@ -23,6 +23,7 @@ const RUBRIC_KEYS = [
   'correctness',
   'clarity',
 ] as const;
+<<<<<<< HEAD
 const JUDGE_LABEL_MAP: Record<string, string> = {
  'judge-mini-a': 'judge-a-llama-3.1-8b-instant',
  'judge-mini-b': 'judge-b-prometheus-7b-v2.0',
@@ -31,6 +32,9 @@ const JUDGE_LABEL_MAP: Record<string, string> = {
  'hf/prometheus-7b-v2.0': 'judge-b-prometheus-7b-v2.0',
  'groq/llama-3.3-70b-versatile': 'judge-c-llama-3.3-70b-versatile',
 };
+=======
+
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
 export default function EvalLab() {
   const [config, setConfig] = useState<EvalConfig | null>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -45,6 +49,7 @@ export default function EvalLab() {
   const [rubrics, setRubrics] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
+<<<<<<< HEAD
   const [isUploading, setIsUploading] = useState(false);
 
 
@@ -67,14 +72,36 @@ useEffect(() => {
     if (!file) return;
     setError(null);
     setIsUploading(true);
+=======
+
+  useEffect(() => {
+    getConfig()
+      .then((cfg) => {
+        setConfig(cfg);
+        const initial = Object.fromEntries(
+          (cfg.default_rubrics?.length ? cfg.default_rubrics : RUBRIC_KEYS).map((k) => [k, true])
+        );
+        setRubrics(initial);
+        setSelectedJudges(cfg.judges.map((j) => j.id));
+      })
+      .catch((e) => setError(String(e)));
+  }, []);
+
+  const onUpload = async () => {
+    if (!file) return;
+    setError(null);
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
     try {
       const res = await uploadFile(file);
       setUpload(res);
       setJobId(res.job_id);
     } catch (e) {
       setError(String(e));
+<<<<<<< HEAD
     } finally {
       setIsUploading(false);
+=======
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
     }
   };
 
@@ -83,8 +110,13 @@ useEffect(() => {
     setError(null);
     try {
       const judges = selectedJudges.length ? selectedJudges : config?.judges.map((j) => j.id) || [];
+<<<<<<< HEAD
       setPolling(true);
       await runEval({ job_id: jobId, judges, rubrics });
+=======
+      await runEval({ job_id: jobId, judges, rubrics });
+      setPolling(true);
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
       startPolling(jobId);
     } catch (e) {
       setError(String(e));
@@ -96,7 +128,11 @@ useEffect(() => {
       try {
         const s = await getJobStatus(jid);
         setStatus(s);
+<<<<<<< HEAD
         if (s.status === 'DONE' || s.status === 'FAILED') {
+=======
+        if (s.total > 0 && s.finished >= s.total) {
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
           clearInterval(timer);
           setPolling(false);
         }
@@ -113,11 +149,19 @@ useEffect(() => {
     listRecords(jobId, page, pageSize, selectedJudges)
       .then((r) => setRecords(r))
       .catch(() => {});
+<<<<<<< HEAD
   }, [jobId, status?.progress, page, pageSize, selectedJudges]);
 
   const progress = useMemo(() => {
     if (!status || !status.total) return 0;
     return Math.min(100, Math.round((status.progress / (status.total || 1)) * 100));
+=======
+  }, [jobId, status?.finished, page, pageSize, selectedJudges]);
+
+  const progress = useMemo(() => {
+    if (!status || !status.total) return 0;
+    return Math.min(100, Math.round((status.finished / status.total) * 100));
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
   }, [status]);
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -139,6 +183,7 @@ useEffect(() => {
     }
   };
 
+<<<<<<< HEAD
   const isRunButtonDisabled = !jobId || polling || status?.status === 'DONE';
   const isUploadButtonDisabled = !file || isUploading;
 
@@ -154,11 +199,17 @@ useEffect(() => {
     return mapping[id] || id;
   };
 
+=======
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
   return (
     <div className="eval-lab">
       <h2>Evaluation Lab</h2>
       {error && <div className="error-message">Error: {error}</div>}
 
+<<<<<<< HEAD
+=======
+      {/* Config panel */}
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
       <section className="config-panel">
         <h3>Configuration</h3>
         <div className="config-section">
@@ -175,7 +226,11 @@ useEffect(() => {
                     );
                   }}
                 />
+<<<<<<< HEAD
                 {mapJudgeIdToDisplayName(j.label)}
+=======
+                {j.label}
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
               </label>
             ))}
           </div>
@@ -198,6 +253,10 @@ useEffect(() => {
         </div>
       </section>
 
+<<<<<<< HEAD
+=======
+      {/* Upload panel */}
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
       <section className="upload-panel">
         <h3>Upload & Run</h3>
         <div className="upload-controls">
@@ -230,32 +289,47 @@ useEffect(() => {
               </div>
             )}
           </div>
+<<<<<<< HEAD
           <button 
             onClick={onUpload} 
             disabled={isUploadButtonDisabled} 
             className="upload-btn"
           >
             {isUploading ? 'Uploading...' : 'Upload'}
+=======
+          <button onClick={onUpload} disabled={!file} className="upload-btn">
+            Upload
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
           </button>
         </div>
         {upload && (
           <div className="upload-info">
             <div className="job-id">Job ID: {upload.job_id}</div>
+<<<<<<< HEAD
             <button 
               onClick={onRun} 
               disabled={isRunButtonDisabled}
               className="run-btn"
             >
               {polling ? 'Evaluating...' : status?.status === 'DONE' ? 'Evaluation Complete' : 'Start Evaluation'}
+=======
+            <button onClick={onRun} disabled={!jobId || polling} className="run-btn">
+              {polling ? 'Evaluating...' : 'Start Evaluation'}
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
             </button>
           </div>
         )}
       </section>
 
+<<<<<<< HEAD
+=======
+      {/* Status panel */}
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
       <section className="status-panel">
         <h3>Status & Summary</h3>
         {status ? (
           <div className="status-content">
+<<<<<<< HEAD
             <div className="status-header">
               <div className="status-badge status-badge-running">
                 {status.status === 'RUNNING' && 'Running'}
@@ -303,6 +377,31 @@ useEffect(() => {
         )}
       </section>
 
+=======
+            <div className="progress-info">
+              Progress: {status.finished} / {status.total} ({progress}%)
+            </div>
+            <div className="progress-bar">
+              <div className="progress-fill" style={{ width: `${progress}%` }} />
+            </div>
+            <div className="metrics-summary">
+              <strong>Summary:</strong>
+              <div className="metrics-grid">
+                {Object.entries(status.metrics_summary || {}).map(([k, v]) => (
+                  <div key={k} className="metric-item">
+                    {k}: {typeof v === 'number' ? v.toFixed(3) : String(v)}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div>No evaluation running or loading...</div>
+        )}
+      </section>
+
+      {/* Records panel */}
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
       <section className="records-panel">
         <h3>Records & Export</h3>
         {jobId ? (

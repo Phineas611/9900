@@ -55,6 +55,10 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
         return response.json();
       })
       .then(data => {
+<<<<<<< HEAD
+=======
+        console.log(data);
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
         if (!data.detail) {
           // After successful login, the callback is written to localStorage and enters the dashboard page
           onLogin(email, data.token, data.name);

@@ -1,5 +1,9 @@
 import { useState, useEffect } from 'react';
+<<<<<<< HEAD
 import { API_BASE_URL } from '../../../services/api'
+=======
+// import { API_BASE_URL } from '../../../services/api'
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
 import './AllContracts.css';
 
 // Types
@@ -25,6 +29,17 @@ interface Contract {
   tags: string[];
 }
 
+<<<<<<< HEAD
+=======
+/*
+interface ApiResponse<T> {
+  data: T;
+  success: boolean;
+  message?: string;
+}
+*/
+
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
 const AllContracts = () => {
   // State management
   const [stats, setStats] = useState<ContractStats | null>(null);
@@ -44,12 +59,27 @@ const AllContracts = () => {
 
   // Fetch contract statistics
   const fetchContractStats = async (): Promise<ContractStats> => {
+<<<<<<< HEAD
+=======
+    return {
+      totalContracts: 156,
+      totalContractsChange: 12,
+      analyzedSentences: 24567,
+      analyzedSentencesChange: 8,
+      averageAmbiguityRate: 7.8,
+      averageAmbiguityRateChange: -8.3,
+      averageQualityScore: 7.2,
+      averageQualityScoreChange: 0.5
+    };
+    /*
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
     const response = await fetch(`${API_BASE_URL}/contracts/stats`, {
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('token')}`,
         'Content-Type': 'application/json',
       },
     });
+<<<<<<< HEAD
 
     if (!response.ok) {
       throw new Error('Failed to fetch contract statistics');
@@ -57,6 +87,16 @@ const AllContracts = () => {
 
     const result = await response.json();
     return result;
+=======
+    
+    if (!response.ok) {
+      throw new Error('Failed to fetch contract statistics');
+    }
+    
+    const result: ApiResponse<ContractStats> = await response.json();
+    return result.data;
+    */
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
   };
 
   // Fetch contracts with filters and pagination
@@ -65,8 +105,59 @@ const AllContracts = () => {
     limit: number, 
     search: string, 
     type: string, 
+<<<<<<< HEAD
     status: string
   ): Promise<{ items: Contract[]; total: number }> => {
+=======
+    _: string
+  ): Promise<{ items: Contract[]; total: number }> => {
+    const mockContracts: Contract[] = [
+      {
+        id: '1',
+        name: 'Software_License_Agreement.pdf',
+        date: '2024-01-15',
+        type: 'PDF',
+        sentences: 81234,
+        ambiguityRate: 12.5,
+        qualityScore: 8.2,
+        tags: ['Software', 'License', 'Technology']
+      },
+      {
+        id: '2',
+        name: 'Employment_Contract_v2.docx',
+        date: '2024-01-14',
+        type: 'DOCX',
+        sentences: 4567,
+        ambiguityRate: 8.3,
+        qualityScore: 7.8,
+        tags: ['Employment', 'HR', 'Legal']
+      }
+    ];
+  
+    let filteredContracts = mockContracts;
+    
+    if (search) {
+      filteredContracts = filteredContracts.filter(contract => 
+        contract.name.toLowerCase().includes(search.toLowerCase())
+      );
+    }
+    
+    if (type) {
+      filteredContracts = filteredContracts.filter(contract => 
+        contract.type === type
+      );
+    }
+  
+    const startIndex = (page - 1) * limit;
+    const endIndex = startIndex + limit;
+    const paginatedContracts = filteredContracts.slice(startIndex, endIndex);
+  
+    return {
+      items: paginatedContracts,
+      total: filteredContracts.length
+    };
+    /*
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
     const params = new URLSearchParams({
       page: page.toString(),
       limit: limit.toString(),
@@ -86,8 +177,14 @@ const AllContracts = () => {
       throw new Error('Failed to fetch contracts data');
     }
     
+<<<<<<< HEAD
     const result = await response.json();
     return result;
+=======
+    const result: ApiResponse<{ items: Contract[]; total: number }> = await response.json();
+    return result.data;
+    */
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
   };
 
   // Load all data
@@ -120,12 +217,18 @@ const AllContracts = () => {
   };
 
   // Handle filter changes
+<<<<<<< HEAD
   /*
+=======
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
   const handleFilterChange = () => {
     setCurrentPage(1);
     loadData();
   };
+<<<<<<< HEAD
   */
+=======
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
 
   // Handle pagination
   const handlePageChange = (page: number) => {
@@ -185,21 +288,35 @@ const AllContracts = () => {
               value={typeFilter}
               onChange={(e) => {
                 setTypeFilter(e.target.value);
+<<<<<<< HEAD
                 // handleFilterChange();
+=======
+                handleFilterChange();
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
               }}
               className="filter-select"
             >
               <option value="">All Types</option>
+<<<<<<< HEAD
               <option value=".pdf">.pdf</option>
               <option value=".docx">.docx</option>
               <option value=".txt">.txt</option>
+=======
+              <option value="PDF">PDF</option>
+              <option value="DOCX">DOCX</option>
+              <option value="TXT">TXT</option>
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
             </select>
             
             <select 
               value={statusFilter}
               onChange={(e) => {
                 setStatusFilter(e.target.value);
+<<<<<<< HEAD
                 // handleFilterChange();
+=======
+                handleFilterChange();
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
               }}
               className="filter-select"
             >
@@ -260,7 +377,11 @@ const AllContracts = () => {
               <div className="stat-title">Quality Score</div>
               <div className="stat-icon">⭐</div>
             </div>
+<<<<<<< HEAD
             <div className="stat-value">{stats.averageQualityScore.toFixed(2)}/1</div>
+=======
+            <div className="stat-value">{stats.averageQualityScore}/10</div>
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
             <div className="stat-label">Average quality score</div>
             <div className={`stat-change ${stats.averageQualityScoreChange >= 0 ? 'positive' : 'negative'}`}>
               {stats.averageQualityScoreChange >= 0 ? '+' : ''}{stats.averageQualityScoreChange} from last month
@@ -299,8 +420,13 @@ const AllContracts = () => {
                   <td className="contract-name">
                     <div className="name-wrapper">
                       <span className="file-icon">
+<<<<<<< HEAD
                         {contract.type === '.pdf' ? '📄' : 
                          contract.type === '.docx' ? '📝' : '📃'}
+=======
+                        {contract.type === 'PDF' ? '📄' : 
+                         contract.type === 'DOCX' ? '📝' : '📃'}
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
                       </span>
                       {contract.name}
                     </div>

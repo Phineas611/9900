@@ -46,4 +46,12 @@ backend/alembic/
 # Backend test data
 backend/testdata/
 backend/test_workflow.py
+<<<<<<< HEAD
 backend/TEST_WORKFLOW.md
+=======
+backend/TEST_WORKFLOW.md
+
+.env
+**/.env
+backend/.env
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98

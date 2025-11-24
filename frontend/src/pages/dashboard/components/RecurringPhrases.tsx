@@ -1,5 +1,9 @@
 import { useState, useEffect } from 'react';
+<<<<<<< HEAD
 import { API_BASE_URL } from '../../../services/api'
+=======
+// import { API_BASE_URL } from '../../../services/api'
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
 import {
   BarChart,
   Bar,
@@ -34,6 +38,10 @@ const RecurringPhrases = () => {
   const [error, setError] = useState<string | null>(null);
 
   // Fetch phrases data from API
+<<<<<<< HEAD
+=======
+  /*
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
   const fetchPhrasesData = async (): Promise<PhrasesData> => {
     const response = await fetch(`${API_BASE_URL}/phrases/recurring`, {
       headers: {
@@ -49,15 +57,93 @@ const RecurringPhrases = () => {
     const result = await response.json();
     return result.data;
   };
+<<<<<<< HEAD
+=======
+  */
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
 
   // Load data
   useEffect(() => {
     const loadData = async () => {
       try {
+<<<<<<< HEAD
         setLoading(true);
         setError(null);
         const phrasesData = await fetchPhrasesData();
         setData(phrasesData);
+=======
+        // setLoading(true);
+        setError(null);
+        //const phrasesData = await fetchPhrasesData();
+        //setData(phrasesData);
+
+        // Mock data
+        const mockPhrasesData: PhrasesData = {
+          ambiguousPhrases: [
+            {
+              id: '1',
+              rank: 1,
+              phrase: 'reasonable efforts',
+              description: 'Found in 156 contracts',
+              frequency: 156,
+              maxFrequency: 200,
+              status: 'High Risk',
+              time: '24 times'
+            },
+            {
+              id: '2',
+              rank: 2,
+              phrase: 'best efforts',
+              description: 'Found in 142 contracts',
+              frequency: 142,
+              maxFrequency: 200,
+              status: 'High Risk',
+              time: '18 times'
+            },
+            {
+              id: '3',
+              rank: 3,
+              phrase: 'material breach',
+              description: 'Found in 128 contracts',
+              frequency: 128,
+              maxFrequency: 200,
+              status: 'Medium Risk',
+              time: '15 times'
+            },
+            {
+              id: '4',
+              rank: 4,
+              phrase: 'good faith',
+              description: 'Found in 115 contracts',
+              frequency: 115,
+              maxFrequency: 200,
+              status: 'Medium Risk',
+              time: '12 times'
+            },
+            {
+              id: '5',
+              rank: 5,
+              phrase: 'commercially reasonable',
+              description: 'Found in 98 contracts',
+              frequency: 98,
+              maxFrequency: 200,
+              status: 'Medium Risk',
+              time: '8 times'
+            },
+            {
+              id: '6',
+              rank: 6,
+              phrase: 'sole discretion',
+              description: 'Found in 87 contracts',
+              frequency: 87,
+              maxFrequency: 200,
+              status: 'Low Risk',
+              time: '6 times'
+            }
+          ]
+        };
+        setData(mockPhrasesData);
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load phrases data');
         console.error('Phrases data loading error:', err);
@@ -163,14 +249,22 @@ const RecurringPhrases = () => {
             <BarChart
               data={data?.ambiguousPhrases}
               layout="vertical"
+<<<<<<< HEAD
               margin={{ top: 20, right: 30, left: 30, bottom: 5 }}
+=======
+              margin={{ top: 20, right: 30, left: 100, bottom: 5 }}
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
             >
               <CartesianGrid strokeDasharray="3 3" horizontal={false} />
               <XAxis type="number" />
               <YAxis 
                 type="category" 
                 dataKey="phrase" 
+<<<<<<< HEAD
                 width={280}
+=======
+                width={90}
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
                 tick={{ fontSize: 12 }}
               />
               <Tooltip content={<UsageTooltip />} />

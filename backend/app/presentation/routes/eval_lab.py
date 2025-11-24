@@ -1,6 +1,10 @@
 import os
 import uuid
+<<<<<<< HEAD
 import io, json
+=======
+import io
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
 import asyncio
 from pathlib import Path
 from typing import List, Optional, Dict
@@ -29,7 +33,10 @@ from app.application.services.evaluation_service import EvaluationService
 from app.database.models.evaluation_run import EvaluationRun
 from app.database.models.evaluation_item import EvaluationItem
 from app.database.models.evaluation_aggregate import EvaluationAggregate
+<<<<<<< HEAD
 from app.database.models.evaluation_judgment import EvaluationJudgment
+=======
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
 
 
 router = APIRouter(prefix="/eval-lab", tags=["Evaluation Lab"])
@@ -114,6 +121,7 @@ async def _run_in_background(job_id: str, run_id: str, assess_req: AssessRequest
         # Judges/rubrics/custom already set on job at submission time
         # Compute totals and fill records
         pairs, _ = repo.list_results(db, run_id, page=1, page_size=10**9)
+<<<<<<< HEAD
 
         # --- BEGIN OPTIMIZATION ---
         # Pre-fetch all judgments for the run to avoid N+1 queries
@@ -127,6 +135,8 @@ async def _run_in_background(job_id: str, run_id: str, assess_req: AssessRequest
             judgments_by_item_pk[j.item_pk].append(j)
         # --- END OPTIMIZATION ---
 
+=======
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
         total = 0
         finished = 0
         class_ok_total = 0
@@ -134,7 +144,11 @@ async def _run_in_background(job_id: str, run_id: str, assess_req: AssessRequest
 
         for item, agg in pairs:
             total += 1
+<<<<<<< HEAD
             js = judgments_by_item_pk.get(item.id, [])
+=======
+            js = repo.list_judgments_for_item(db, run_id, item.id)
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
             judges_list = []
             class_votes = []
             rationale_votes = []
@@ -437,6 +451,7 @@ def job_state(job_id: str, db: Session = Depends(get_db)):
         elif status == "failed":
             message = "Failed"
 
+<<<<<<< HEAD
     try:
         if progress_obj and int(progress_obj.get("total") or 0) > 0:
             cur = int(progress_obj.get("current") or 0)
@@ -448,6 +463,8 @@ def job_state(job_id: str, db: Session = Depends(get_db)):
     except Exception:
         pass
 
+=======
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
     return {
         "task_id": job_id,
         "status": status,
@@ -605,6 +622,7 @@ def export_xlsx(job_id: str, db: Session = Depends(get_db)):
     b.seek(0)
     return StreamingResponse(b, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={
         "Content-Disposition": f"attachment; filename=eval_{job_id}.xlsx"
+<<<<<<< HEAD
     })
 
 
@@ -667,3 +685,6 @@ def hf_raw_stats(run_id: str, judge_id: str, sample_limit: int = Query(5, ge=1, 
         "true_negative_rate_by_dim": rates,
         "samples": samples,
     }
+=======
+    })
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98

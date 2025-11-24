@@ -1,6 +1,9 @@
 import os
 import re
+<<<<<<< HEAD
 import json
+=======
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
 from typing import List, Optional, Dict, Any, Callable
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
@@ -33,6 +36,7 @@ class PromptLabService:
         All configured models are generic NLI-type classifiers (not sentiment-specific).
         """
         self._models: Dict[str, Dict[str, Any]] = {
+<<<<<<< HEAD
             "llama3-8ba_instruct-hf": {
                 "id": "llama3-8ba_instruct-hf",
                 "name": "Llama3 8B Instruct (HF)",
@@ -51,6 +55,8 @@ class PromptLabService:
                 "hf_name": "mistralai/Mixtral-8x7B-Instruct-v0.1",
                 "task": "chat-completion",
             },
+=======
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
             "deberta-base-mnli": {
                 "id": "deberta-base-mnli",
                 "name": "DeBERTa Base MNLI (classification)",
@@ -63,6 +69,7 @@ class PromptLabService:
                 "hf_name": "FacebookAI/roberta-large-mnli",
                 "task": "text-classification",
             },
+<<<<<<< HEAD
             "mistral-7b-instruct": {
                 "id": "mistral-7b-instruct",
                 "name": "Mistral-7B Instruct (generation)",
@@ -81,6 +88,18 @@ class PromptLabService:
 
         # Default model: light-weight Groq 8B chat
         self._current_model_id: str = "qwen2.5-7b-instruct"
+=======
+            "deberta-large-mnli": {
+                "id": "deberta-large-mnli",
+                "name": "DeBERTa Large MNLI (classification)",
+                "hf_name": "microsoft/deberta-large-mnli",
+                "task": "text-classification",
+            },
+        }
+
+        # Default model: light-weight DeBERTa base MNLI.
+        self._current_model_id: str = "deberta-base-mnli"
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
 
         # ----------------- prompt templates -----------------
         self._prompts: Dict[str, str] = {
@@ -185,6 +204,7 @@ class PromptLabService:
             return None
 
         cfg = self._models[model_id]
+<<<<<<< HEAD
         task = cfg.get("task", "text-classification")
         repo = cfg["hf_name"]
 
@@ -226,6 +246,8 @@ class PromptLabService:
                     break
             self._last_hf_error = last_err or "unknown_groq_error"
             return None
+=======
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
 
         try:
             client = self._get_hf_client()
@@ -233,6 +255,12 @@ class PromptLabService:
             self._last_hf_error = f"client_init: {e}"
             return None
 
+<<<<<<< HEAD
+=======
+        task = cfg.get("task", "text-classification")
+        repo = cfg["hf_name"]
+
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
         import time
         # Exponential backoff, up to ~1 minute total.
         delays = [0, 2, 4, 8, 16, 32]
@@ -254,6 +282,7 @@ class PromptLabService:
                         return_full_text=False,
                     )
                     data = [{"generated_text": out}]
+<<<<<<< HEAD
                 elif task == "chat-completion":
                     out = client.chat_completion(
                         model=repo,
@@ -267,6 +296,8 @@ class PromptLabService:
                     except Exception:
                         content = str(out)
                     data = [{"generated_text": content}]
+=======
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
                 else:
                     # Main path: generic text-classification call.
                     data = client.text_classification(
@@ -308,8 +339,13 @@ class PromptLabService:
         """
         task = cfg.get("task", "text-classification")
 
+<<<<<<< HEAD
         # ----- Generation-style output -----
         if task in ("text-generation", "chat-completion", "groq-chat"):
+=======
+        # ----- Fallback: generation-style output (currently unused) -----
+        if task == "text-generation":
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
             if isinstance(data, list) and data and "generated_text" in data[0]:
                 text = str(data[0]["generated_text"])
                 up = text.upper()
@@ -386,6 +422,7 @@ class PromptLabService:
             "score": 0.5,
         }
 
+<<<<<<< HEAD
     def _run_batch_chat(self, model_id: str, sentences: List[str], prompt: str) -> Optional[List[Dict[str, Any]]]:
         self._last_hf_error = None
         if model_id not in self._models:
@@ -485,6 +522,8 @@ class PromptLabService:
             self._last_hf_error = str(e)[:200]
             return None
 
+=======
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
     def _run_inference(self, sentence: str, prompt: str) -> Dict[str, Any]:
         """
         High-level inference wrapper.
@@ -507,6 +546,7 @@ class PromptLabService:
 
         out = self._run_remote_model(model["id"], text)
         if not out:
+<<<<<<< HEAD
             fb_id = "deberta-base-mnli"
             try:
                 out = self._run_remote_model(fb_id, sentence)
@@ -518,6 +558,13 @@ class PromptLabService:
                     f"Hugging Face model unavailable. "
                     f"Check HF_API_TOKEN / HF_TOKEN, network, and model id '{model['hf_name']}'.{hint}"
                 )
+=======
+            hint = f" Last HF error: {self._last_hf_error}" if self._last_hf_error else ""
+            raise RuntimeError(
+                f"Hugging Face model unavailable. "
+                f"Check HF_API_TOKEN / HF_TOKEN, network, and model id '{model['hf_name']}'.{hint}"
+            )
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
         out["rationale"] = "[HF] " + str(out.get("rationale", "")).lstrip()
         return out
 
@@ -686,7 +733,11 @@ class PromptLabService:
 
         logger.info(f"[PromptLab] Starting batch processing: {total} sentences, contract_id={contract_id}")
 
+<<<<<<< HEAD
         BATCH_SIZE = 50
+=======
+        BATCH_SIZE = 10
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
         for i in range(0, len(sentences), BATCH_SIZE):
             batch = sentences[i : i + BATCH_SIZE]
             batch_num = i // BATCH_SIZE + 1
@@ -696,6 +747,7 @@ class PromptLabService:
                 f"({i+1}-{min(i+BATCH_SIZE, total)}/{total})"
             )
 
+<<<<<<< HEAD
             used_batch_chat = False
             try:
                 if model.get("task") == "chat-completion":
@@ -765,6 +817,45 @@ class PromptLabService:
                                 sentence_id=None,
                             )
                         )
+=======
+            for idx_in_batch, s in enumerate(batch):
+                try:
+                    inf = self._run_inference(s, prompt)
+                    sid = self._persist_result(
+                        db,
+                        user_id,
+                        contract_id,
+                        s,
+                        inf["label"],
+                        inf["rationale"],
+                        inf["score"],
+                        auto_commit=False,
+                    )
+                    out.append(
+                        ExplainResult(
+                            sentence=s,
+                            label=inf["label"],
+                            rationale=inf["rationale"],
+                            model_id=model["id"],
+                            contract_id=contract_id,
+                            sentence_id=sid,
+                        )
+                    )
+                except Exception as e:
+                    logger.error(
+                        f"[PromptLab] Failed to process sentence {i+idx_in_batch+1}/{total}: {str(e)[:200]}"
+                    )
+                    out.append(
+                        ExplainResult(
+                            sentence=s,
+                            label="ERROR",
+                            rationale=f"Processing error: {str(e)[:200]}",
+                            model_id=model["id"],
+                            contract_id=contract_id,
+                            sentence_id=None,
+                        )
+                    )
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
 
             try:
                 db.commit()

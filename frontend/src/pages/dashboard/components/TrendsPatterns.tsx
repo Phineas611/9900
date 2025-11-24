@@ -1,5 +1,9 @@
 import { useState, useEffect } from 'react';
+<<<<<<< HEAD
 import { API_BASE_URL } from '../../../services/api'
+=======
+// import { API_BASE_URL } from '../../../services/api'
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
 import {
   BarChart,
   Bar,
@@ -46,6 +50,10 @@ const TrendsPatterns = () => {
   const [timeRange, setTimeRange] = useState('3months');
 
   // Fetch chart data from API
+<<<<<<< HEAD
+=======
+  /*
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
   const fetchChartData = async (range: string): Promise<ChartData> => {
     const response = await fetch(`${API_BASE_URL}/charts/trends?range=${range}`, {
       headers: {
@@ -61,15 +69,57 @@ const TrendsPatterns = () => {
     const result = await response.json();
     return result.data;
   };
+<<<<<<< HEAD
+=======
+  */
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
 
   // Load data when component mounts or time range changes
   useEffect(() => {
     const loadData = async () => {
       try {
+<<<<<<< HEAD
         setLoading(true);
         setError(null);
         const chartData = await fetchChartData(timeRange);
         setData(chartData);
+=======
+        // setLoading(true);
+        setError(null);
+        // const chartData = await fetchChartData(timeRange);
+        // setData(chartData);
+        const mockChartData: ChartData = {
+          monthlyData: [
+            { month: 'Jan', contracts: 45, ambiguityRate: 12.5 },
+            { month: 'Feb', contracts: 52, ambiguityRate: 11.8 },
+            { month: 'Mar', contracts: 48, ambiguityRate: 13.2 },
+            { month: 'Apr', contracts: 61, ambiguityRate: 10.5 },
+            { month: 'May', contracts: 55, ambiguityRate: 9.8 },
+            { month: 'Jun', contracts: 67, ambiguityRate: 8.9 }
+          ],
+          qualityScores: [
+            { month: 'Jan', score: 7.2 },
+            { month: 'Feb', score: 7.5 },
+            { month: 'Mar', score: 7.8 },
+            { month: 'Apr', score: 8.1 },
+            { month: 'May', score: 8.3 },
+            { month: 'Jun', score: 8.6 }
+          ],
+          contractTypes: [
+            { type: 'PDF', value: 45, ambiguity: 12.3 },
+            { type: 'DOCX', value: 35, ambiguity: 9.8 },
+            { type: 'TXT', value: 15, ambiguity: 18.2 },
+            { type: 'DOC', value: 5, ambiguity: 22.1 }
+          ],
+          ambiguityByType: [
+            { type: 'PDF', ambiguity: 8.5 },
+            { type: 'DOCX', ambiguity: 12.7 },
+            { type: 'TXT', ambiguity: 11.2 },
+            { type: 'DOC', ambiguity: 15.8 }
+          ]
+        };
+        setData(mockChartData);
+>>>>>>> ed771aba7f531cf9b42b6983f14a64843e17ac98
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load chart data');
         console.error('Chart data loading error:', err);
